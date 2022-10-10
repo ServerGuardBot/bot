@@ -1,6 +1,6 @@
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import Embed
+from guilded import Embed, MessageEvent
 from guilded.ext import commands
 
 from project.modules.base import Module
@@ -8,6 +8,7 @@ from project.modules.base import Module
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from flask_cors import CORS
 
 load_dotenv()
 
@@ -45,12 +46,13 @@ bot_config: project.config.BaseConfig = configs[app_settings] # A custom copy of
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+cors = CORS(app)
 
 class BotClient(commands.Bot):
     config = app.config
     message_listeners: list = []
 
-client = BotClient('/')
+client = BotClient('/', experimental_event_style=True)
 
 @client.event
 async def on_ready():
@@ -58,11 +60,11 @@ async def on_ready():
     print('Bot ready')
 
 @client.event
-async def on_message(message):
-    await client.process_commands(message)
+async def on_message(event: MessageEvent):
+    await client.process_commands(event.message)
     for callback in client.message_listeners:
         try:
-            await callback(message)
+            await callback(event.message)
         except Exception as e:
             print('Failed to run message listener:', e)
 

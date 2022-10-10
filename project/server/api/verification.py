@@ -13,6 +13,8 @@ from project.helpers.Cache import Cache
 from project.server.models import Guild, GuildUser
 from sqlalchemy_json import TrackedDict
 
+from guilded import Embed
+
 encoder = JSONEncoder()
 verification_blueprint = Blueprint('verification', __name__)
 verify_cache = Cache(60 * 10) # The cache lasts about as long as a token does
@@ -24,6 +26,15 @@ class Role():
 
     def __init__(self, id: int):
         self.id = id
+
+def send_embed(channel_id, embed: Embed):
+    print(channel_id)
+    req = requests.post(f'https://www.guilded.gg/api/v1/channels/{channel_id}/messages', json={
+        'embeds': [embed.to_dict()]
+    }, headers={
+        'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
+    })
+    return req
 
 class VerifyUser(MethodView):
     """ User Verification Resource """
@@ -44,7 +55,7 @@ class VerifyUser(MethodView):
                 'guild_avatar': guild.avatar.aws_url,
                 'user_id': user.id,
                 'user_name': user.name,
-                'user_avatar': user.avatar.aws_url,
+                'user_avatar': user.avatar is not None and user.avatar.aws_url or user.default_avatar.aws_url,
             }), 200
         except jwt.ExpiredSignatureError:
             return jsonify({
@@ -109,17 +120,10 @@ class VerifyUser(MethodView):
                     except Exception:
                         print('Could not DM user about successful verification.')
                     if logs_channel is not None:
-                        channel = await client.fetch_channel(logs_channel)
-                        try:
-                            channel.send(
-                                embed=user_evaluator.generate_embed(
-                                    await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
-                                    True
-                                )
-                            )
-                        except Exception as e:
-                            print(f'Logs channel exists for server {token.guild_id} but failed to send: {str(e)}')
-                    member = client.get_server(token.guild_id).get_member(token.user_id)
+                        send_embed(logs_channel, user_evaluator.generate_embed(
+                            await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                            True
+                        ))
                     if verified_role is not None:
                         try:
                             requests.put(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}/members/{token.user_id}/roles/{verified_role}',
@@ -152,16 +156,10 @@ class VerifyUser(MethodView):
 
             if len(matching_hashes) > 0: # We found another user who was banned with a matching IP, reject them
                 if logs_channel is not None:
-                    channel = await client.fetch_channel(logs_channel)
-                    try:
-                        channel.send(
-                            embed=user_evaluator.generate_embed(
-                                await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
-                                False
-                            )
-                        )
-                    except Exception as e:
-                        print(f'Logs channel exists for server {token.guild_id} but failed to send: {str(e)}')
+                    send_embed(logs_channel, user_evaluator.generate_embed(
+                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                        False
+                    ))
                 return jsonify({
                     'message': 'You are forbidden from entering this server'
                 }), 403
@@ -178,16 +176,10 @@ class VerifyUser(MethodView):
 
                 if len(matching_bids) > 0: # We found another user who was banned with a matching browser id, reject them
                     if logs_channel is not None:
-                        channel = await client.fetch_channel(logs_channel)
-                        try:
-                            channel.send(
-                                embed=user_evaluator.generate_embed(
-                                    await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
-                                    False
-                                )
-                            )
-                        except Exception as e:
-                            print(f'Logs channel exists for server {token.guild_id} but failed to send: {str(e)}')
+                        send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                            await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                            False
+                        ))
                     return jsonify({
                         'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
                     }), 403
@@ -199,16 +191,10 @@ class VerifyUser(MethodView):
             except Exception:
                 print('Could not DM user about successful verification.')
             if logs_channel is not None:
-                channel = await client.fetch_channel(logs_channel)
-                try:
-                    channel.send(
-                        embed=user_evaluator.generate_embed(
-                            await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
-                            True
-                        )
-                    )
-                except Exception as e:
-                    print(f'Logs channel exists for server {token.guild_id} but failed to send: {str(e)}')
+                send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                    await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                    True
+                ))
             member = client.get_server(token.guild_id).get_member(token.user_id)
             if verified_role is not None:
                 try:
@@ -422,10 +408,8 @@ class GuildConfig(MethodView):
             guild.config[item] = curr
         removed = False
         jval = encoder.encode(value)
-        print(jval)
         for i in curr:
             if type(value) is dict:
-                print(encoder.encode(i))
                 if encoder.encode(i) == jval:
                     removed = True
                     curr.remove(i)
@@ -479,9 +463,32 @@ class VerifyBypass(MethodView):
             return jsonify({'message': 'Success'}), 200
         return jsonify({'message': 'Not found'}), 404
 
+class VerifySetUserBanned(MethodView):
+    def patch(self, guild_id: str, user_id: str):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        
+        post_data: dict = request.get_json()
+        value = post_data.get('value')
+
+        db_user: GuildUser | None = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
+
+        if db_user is None:
+            db_user = GuildUser(guild_id, user_id)
+
+        db_user.is_banned = value is True
+
+        db.session.add(db_user)
+        db.session.commit()
+
+        return jsonify({'message': 'Success'}), 200
+
 verification_blueprint.add_url_rule('/verify/<t>', view_func=VerifyUser.as_view('verify'))
 verification_blueprint.add_url_rule('/getguilduser/<guild_id>/<user_id>', view_func=GetGuildUser.as_view('getguilduser'))
 verification_blueprint.add_url_rule('/verify/shorten', view_func=ShortVerifyLink.as_view('shorten_verify_link'))
 verification_blueprint.add_url_rule('/guilddata/<guild_id>', view_func=GuildData.as_view('guilddata'))
 verification_blueprint.add_url_rule('/guilddata/<guild_id>/cfg/<item>', view_func=GuildConfig.as_view('guildconfig'))
 verification_blueprint.add_url_rule('/verify/bypass/<guild_id>/<user_id>', view_func=VerifyBypass.as_view('verifybypass'))
+verification_blueprint.add_url_rule('/verify/setbanned/<guild_id>/<user_id>', view_func=VerifySetUserBanned.as_view('verifysetbanned'))

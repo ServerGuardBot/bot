@@ -45,9 +45,9 @@ class Module:
             role_ids: list[int] = await user.fetch_role_ids()
             for cfg in role_set:
                 try:
-                    i = role_ids.index(cfg.get('id'))
+                    i = role_ids.index(int(cfg.get('id')))
                     return True
-                except Exception:
+                except Exception as e:
                     pass
 
         return False
@@ -67,7 +67,7 @@ class Module:
             for cfg in role_set:
                 if cfg.get('level') == 1: # 0 = Moderator, 1 = Administrator
                     try:
-                        i = role_ids.index(cfg.get('id'))
+                        i = role_ids.index(int(cfg.get('id')))
                         return True
                     except Exception:
                         pass

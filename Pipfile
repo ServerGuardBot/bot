@@ -18,6 +18,7 @@ sqlalchemy-json = "*"
 requests = "*"
 humanfriendly = "*"
 python-dateutil = "*"
+flask-cors = "*"
 
 [dev-packages]
 

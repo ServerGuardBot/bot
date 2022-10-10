@@ -12,6 +12,7 @@ class Guild(db.Model):
 
     def __init__(self, guild_id: str):
         self.guild_id = guild_id
+        self.config = {}
     
     def __repr__(self):
         return f'<Guild {self.guild_id}>'

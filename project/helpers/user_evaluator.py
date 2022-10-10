@@ -2,9 +2,8 @@ from datetime import datetime
 from dateutil import parser
 from json import JSONDecoder
 from project import client, bot_config
-from guilded import Embed
+from guilded import Embed, User
 from humanfriendly import format_timespan
-
 import requests, guilded
 
 decoder = JSONDecoder()
@@ -13,9 +12,14 @@ ACCOUNT_AGE_THRESHOLD = 60 * 60 * 24 * 7
 
 async def evaluate_user(guild_id: str, user_id: str, connections: str):
     socials: dict = decoder.decode(connections)
-    user = await client.get_server(guild_id).fetch_member(user_id)
+    user_req = requests.get(f'https://www.guilded.gg/api/v1/servers/{guild_id}/members/{user_id}', headers={
+        'Authorization': f'Bearer {bot_config.GUILDED_BOT_TOKEN}'
+    })
 
-    print(connections)
+    if not user_req.status_code == 200:
+        raise Exception
+    
+    user = user_req.json().get('member')
 
     db_user_req = requests.get(f'http://localhost:5000/getguilduser/{guild_id}/{user_id}', headers={
         'authorization': bot_config.SECRET_KEY
@@ -34,10 +38,10 @@ async def evaluate_user(guild_id: str, user_id: str, connections: str):
 
     using_vpn = db_user != None and db_user.get('using_vpn') or False
 
-    created_at = user.created_at
-    age = (datetime.now() - created_at).total_seconds()
+    created_at = parser.parse(user.get('user').get('createdAt')).replace(tzinfo=None)
+    age = (datetime.now().replace(tzinfo=None) - created_at).total_seconds()
     age_score = round((1 - (abs(min(age, ACCOUNT_AGE_THRESHOLD)) / ACCOUNT_AGE_THRESHOLD)) * 100)
-    avatar_score = user.avatar == user.default_avatar and 10 or 0 # Default avatar makes them more likely to be a troll or ban evader
+    avatar_score = user.get('user').get('avatar') == None and 10 or 0 # Default avatar makes them more likely to be a troll or ban evader
 
     total_score = age_score + avatar_score
     total_evaled = 130 # Upper limits of the score
@@ -56,9 +60,9 @@ async def evaluate_user(guild_id: str, user_id: str, connections: str):
         total_score += scores['twitter']
 
     return {
-        'Name': user.name,
+        'Name': user.get('user').get('name'),
         'User_Id': user_id,
-        'User_Avatar': user.avatar.aws_url,
+        'User_Avatar': user.get('user').get('avatar'),
         'Connection_Scores': scores,
         'Connections': socials,
         'VPN': using_vpn,

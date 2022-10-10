@@ -1,5 +1,5 @@
 from json import JSONEncoder
-from guilded import Server, Member, ChatChannel, Embed
+from guilded import Server, Member, ChatChannel, Embed, BanDeleteEvent, BanCreateEvent, MemberJoinEvent
 from guilded.ext import commands
 from project.modules.base import Module
 from project import bot_config
@@ -57,7 +57,7 @@ class VerificationModule(Module):
                 'authorization': bot_config.SECRET_KEY
             }).json()['result']
 
-            await ctx.reply(content=f'Here\'s your verification link: https://serverguard.reapimus.com/verify/{link}', private=True)
+            await ctx.reply(content=f'Here\'s your verification link: [{link}](https://serverguard.reapimus.com/verify/{link})', private=True)
         
         @bot.group(description='Configure bot settings', invoke_without_command=True)
         async def config(ctx: commands.Context):
@@ -287,10 +287,10 @@ class VerificationModule(Module):
             await owner.send('Hey! Thanks for using Server Guard. To properly setup your server make sure to setup config using `/config`!')
         
         @bot.event
-        async def on_member_join(member: Member):
-            if member.bot:
+        async def on_member_join(event: MemberJoinEvent):
+            if event.member.bot:
                 return
-            guild_data_req = requests.get(f'http://localhost:5000/guilddata/{member.server.id}', headers={
+            guild_data_req = requests.get(f'http://localhost:5000/guilddata/{event.server_id}', headers={
                 'authorization': bot_config.SECRET_KEY
             })
             guild_data: dict = guild_data_req.json()
@@ -298,7 +298,30 @@ class VerificationModule(Module):
             verification_channel = guild_data.get('config').get('verification_channel')
             
             if unverified_role:
-                await member.add_role(unverified_role)
+                requests.put(f'https://www.guilded.gg/api/v1/servers/{event.server_id}/members/{event.member.id}/roles/{unverified_role}',
+                headers={
+                    'Authorization': f'Bearer {bot_config.GUILDED_BOT_TOKEN}'
+                })
             if verification_channel:
-                channel: ChatChannel = await member.server.fetch_channel(verification_channel)
-                await channel.send(f'Welcome {member.name}! Please verify using the /verify command.')
+                channel: ChatChannel = await event.server.fetch_channel(verification_channel)
+                await channel.send(f'Welcome {event.member.name}! Please verify using the /verify command.')
+        
+        @bot.event
+        async def on_ban_create(event: BanCreateEvent):
+            if event.ban.user.bot:
+                return
+            guild_data_req = requests.patch(f'http://localhost:5000/verify/setbanned/{event.server_id}/{event.ban.user.id}', json={
+                'value': True
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+        
+        @bot.event
+        async def on_ban_delete(event: BanDeleteEvent):
+            if event.ban.user.bot:
+                return
+            guild_data_req = requests.patch(f'http://localhost:5000/verify/setbanned/{event.server_id}/{event.ban.user.id}', json={
+                'value': False
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })

@@ -1,8 +1,19 @@
 import os
+import importlib.resources as resources
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 mysql_prod_base = 'mysql+pymysql://%s:%s@%s/'
 database_name = 'serverguard'
+
+with resources.path(
+        'project', 'database.db'
+    ) as sqlite_filepath:
+        DB_URI = f'sqlite:///{sqlite_filepath}'
+
+with resources.path(
+        'project', 'database_test.db'
+    ) as sqlite_filepath:
+        DB_TESTURI = f'sqlite:///{sqlite_filepath}'
 
 class BaseConfig:
     """Base configuration."""
@@ -23,13 +34,13 @@ class BaseConfig:
 
 class DevelopmentConfig(BaseConfig):
     """Development configuration."""
-    SQLALCHEMY_DATABASE_URI = (mysql_prod_base % (BaseConfig.DB_USER, BaseConfig.DB_PASS, BaseConfig.DB_HOST)) + database_name
+    SQLALCHEMY_DATABASE_URI = DB_URI #(mysql_prod_base % (BaseConfig.DB_USER, BaseConfig.DB_PASS, BaseConfig.DB_HOST)) + database_name
     DEBUG = True
 
 
 class TestingConfig(BaseConfig):
     """Testing configuration."""
-    SQLALCHEMY_DATABASE_URI = (mysql_prod_base % (BaseConfig.DB_USER, BaseConfig.DB_PASS, BaseConfig.DB_HOST)) + database_name + '_test'
+    SQLALCHEMY_DATABASE_URI = DB_TESTURI #(mysql_prod_base % (BaseConfig.DB_USER, BaseConfig.DB_PASS, BaseConfig.DB_HOST)) + database_name + '_test'
     DEBUG = True
     TESTING = True
     PRESERVE_CONTEXT_ON_EXCEPTION = False
@@ -37,5 +48,5 @@ class TestingConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     """Production configuration."""
-    SQLALCHEMY_DATABASE_URI = (mysql_prod_base % (BaseConfig.DB_USER, BaseConfig.DB_PASS, BaseConfig.DB_HOST)) + database_name
+    SQLALCHEMY_DATABASE_URI = DB_URI #(mysql_prod_base % (BaseConfig.DB_USER, BaseConfig.DB_PASS, BaseConfig.DB_HOST)) + database_name
     DEBUG = False
