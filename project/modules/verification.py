@@ -20,7 +20,7 @@ class VerificationModule(Module):
         bot = self.bot
 
         @bot.command()
-        async def evaluate(ctx: commands.Context, target: str | None=None):
+        async def evaluate(ctx: commands.Context, target: str=None):
             await self.validate_permission_level(1, ctx)
             user = target == None and ctx.author or await member.convert(ctx, target)
             if user.bot:

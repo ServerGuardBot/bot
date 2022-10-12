@@ -10,6 +10,9 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
 
+from multiprocessing import Lock
+from multiprocessing.managers import AcquirerProxy, BaseManager, DictProxy
+
 load_dotenv()
 
 import project.server
@@ -21,8 +24,30 @@ import logging
 import inspect
 import os
 import sys
+import ssl
+ssl_context = ssl.create_default_context()
+# Sets up old and insecure TLSv1.
+ssl_context.options &= (
+    ~getattr(ssl, "OP_NO_TLSv1_3", 0)
+    & ~ssl.OP_NO_TLSv1_2
+    & ~ssl.OP_NO_TLSv1_1
+)
+ssl_context.minimum_version = ssl.TLSVersion.TLSv1
 
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
+
+def get_shared_state(host="127.0.0.1", port=35791, key=b"totally_secret"):
+    shared_dict = {}
+    shared_lock = Lock()
+    manager = BaseManager((host, port), key)
+    manager.register("get_dict", lambda: shared_dict, DictProxy)
+    manager.register("get_lock", lambda: shared_lock, AcquirerProxy)
+    try:
+        manager.get_server()
+        manager.start()
+    except OSError:  # Address already in use
+        manager.connect()
+    return manager.get_dict(), manager.get_lock()
 
 def get_py_files():
     py_files = [py_file for py_file in os.listdir(os.path.join(__location__, 'modules')) if os.path.splitext(py_file)[1] == '.py']
@@ -46,7 +71,7 @@ bot_config: project.config.BaseConfig = configs[app_settings] # A custom copy of
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-cors = CORS(app)
+cors = CORS(app, send_wildcard=True, origins="*")
 
 class BotClient(commands.Bot):
     config = app.config
@@ -106,30 +131,7 @@ gunicorn_logger = logging.getLogger('gunicorn.error')
 app.logger.handlers = gunicorn_logger.handlers
 app.logger.setLevel(gunicorn_logger.level)
 
-def run():
-    # Register the flask apis
-    from project.server.api.verification import verification_blueprint
+# Register the flask apis
+from project.server.api.verification import verification_blueprint
 
-    app.register_blueprint(verification_blueprint)
-
-    # Register help command
-    @client.command(name='commands')
-    async def commands_(ctx: commands.Context):
-        await ctx.reply(embed=Embed(
-            title='Commands',
-            description=
-'''/verify - start the verification process
-/evaluate `<user>` - Moderator+, shows an evaluation of a user
-/config - Administrator, configure the bot's settings. Use /config help for more information
-/bypass `<user>` - Moderator+, allows a user to bypass verification
-/unbypass `<user>` - Moderator+, revokes a user's verification bypass
-/commands - brings up this help text
-'''
-        ))
-
-    # Run the bot
-    client.run(app.config.get('GUILDED_BOT_TOKEN'))
-
-thread = Thread(target=run)
-thread.daemon = True
-thread.start()
+app.register_blueprint(verification_blueprint)

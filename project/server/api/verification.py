@@ -7,7 +7,7 @@ import requests
 from json import JSONEncoder
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
-from project import app, client, db
+from project import app, client, db, get_shared_state
 from project.helpers import user_evaluator, verif_token
 from project.helpers.Cache import Cache
 from project.server.models import Guild, GuildUser
@@ -15,9 +15,12 @@ from sqlalchemy_json import TrackedDict
 
 from guilded import Embed
 
+shared_dict, shared_lock = get_shared_state(port=35792, key=b"verification")
+
 encoder = JSONEncoder()
 verification_blueprint = Blueprint('verification', __name__)
-verify_cache = Cache(60 * 10) # The cache lasts about as long as a token does
+
+verify_cache = Cache(60 * 10, shared_dict)
 
 class Role():
     """Fake role class because for some ungodly reason the role functions expect a god damn object with an id"""
@@ -46,16 +49,20 @@ class VerifyUser(MethodView):
         try:
             token = verif_token.decode_token(t)
 
-            guild = client.get_server(token.guild_id)
-            user = client.get_user(token.user_id)
+            guild = requests.get(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}', headers={
+                'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
+            }).json().get('server')
+            user = requests.get(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}/members/{token.user_id}', headers={
+                'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
+            }).json().get('member')
 
             return jsonify({
                 'guild_id': token.guild_id,
-                'guild_name': guild.name,
-                'guild_avatar': guild.avatar.aws_url,
-                'user_id': user.id,
-                'user_name': user.name,
-                'user_avatar': user.avatar is not None and user.avatar.aws_url or user.default_avatar.aws_url,
+                'guild_name': guild.get('name'),
+                'guild_avatar': guild.get('avatar') or 'https://img.guildedcdn.com/asset/Default/Gil-md.png',
+                'user_id': token.user_id,
+                'user_name': user.get('user').get('name'),
+                'user_avatar': user.get('user').get('avatar') or 'https://img.guildedcdn.com/asset/Default/Gil-md.png',
             }), 200
         except jwt.ExpiredSignatureError:
             return jsonify({
@@ -80,7 +87,7 @@ class VerifyUser(MethodView):
             token = verif_token.decode_token(t)
             hashed_ip = hashlib.sha512(request.environ.get('HTTP_X_REAL_IP', request.remote_addr).encode('utf-8')).hexdigest()
 
-            guild: Guild | None = Guild.query.filter_by(guild_id = token.guild_id).first()
+            guild: Guild = Guild.query.filter_by(guild_id = token.guild_id).first()
 
             verification_channel = guild.config.get('verification_channel')
             logs_channel = guild.config.get('logs_channel')
@@ -88,10 +95,10 @@ class VerifyUser(MethodView):
             verified_role = guild.config.get('verified_role')
             unverified_role = guild.config.get('unverified_role')
 
-            user: GuildUser | None = GuildUser.query.filter_by(guild_id = token.guild_id, user_id = token.user_id).first()
+            user: GuildUser = GuildUser.query.filter_by(guild_id = token.guild_id, user_id = token.user_id).first()
             if user is None:
                 # Create a user profile
-                user = GuildUser(token.guild_id, token.user_id, hashed_ip, browser_id, using_vpn, jsonify(token.connections))
+                user = GuildUser(token.guild_id, token.user_id, hashed_ip or "", browser_id or "", using_vpn or False, encoder.encode(token.connections))
 
                 db.session.add(user)
                 db.session.commit()
@@ -102,23 +109,18 @@ class VerifyUser(MethodView):
                 cur_ip = user.hashed_ip
                 cur_con = user.connections
 
-                user.browser_id = browser_id
-                user.using_vpn = using_vpn
-                user.hashed_ip = hashed_ip
-                user.connections = jsonify(token.connections)
+                user.browser_id = browser_id or ""
+                user.using_vpn = using_vpn or False
+                user.hashed_ip = hashed_ip or ""
+                user.connections = encoder.encode(token.connections)
 
                 # Only update the database if there was a change
                 if cur_bid != browser_id or cur_vpn != using_vpn or cur_ip != hashed_ip or cur_con != user.connections:
                     db.session.add(user)
                     db.session.commit()
-                
+
                 if user.bypass_verification:
                     # Bot-related process
-                    try:
-                        guilded_user = await client.fetch_user(token.user_id)
-                        await guilded_user.send(f'Welcome to {client.get_server(token.guild_id).name}, {guilded_user.name}!')
-                    except Exception:
-                        print('Could not DM user about successful verification.')
                     if logs_channel is not None:
                         send_embed(logs_channel, user_evaluator.generate_embed(
                             await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
@@ -145,7 +147,7 @@ class VerifyUser(MethodView):
                     return jsonify({
                         'message': 'Verification success!'
                     }), 200
-            
+
             # Compare IP hash against database of banned users in this guild that aren't the user being verified
             matching_hashes = db.session.query(GuildUser).filter(
                 GuildUser.hashed_ip == hashed_ip,
@@ -163,7 +165,7 @@ class VerifyUser(MethodView):
                 return jsonify({
                     'message': 'You are forbidden from entering this server'
                 }), 403
-            
+
             # Compare browser id against database of banned users in this guild that aren't the user being verified
             # If the browser id is not empty
             if browser_id != '' and browser_id != None:
@@ -183,19 +185,13 @@ class VerifyUser(MethodView):
                     return jsonify({
                         'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
                     }), 403
-            
+
             # Bot-related process
-            try:
-                guilded_user = await client.fetch_user(token.user_id)
-                await guilded_user.send(f'Welcome to {client.get_server(token.guild_id).name}, {guilded_user.name}!')
-            except Exception:
-                print('Could not DM user about successful verification.')
             if logs_channel is not None:
                 send_embed(logs_channel, embed=user_evaluator.generate_embed(
                     await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
                     True
                 ))
-            member = client.get_server(token.guild_id).get_member(token.user_id)
             if verified_role is not None:
                 try:
                     requests.put(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}/members/{token.user_id}/roles/{verified_role}',
@@ -233,7 +229,7 @@ class GetGuildUser(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        db_user: GuildUser | None = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
+        db_user: GuildUser = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
 
         if db_user:
             return jsonify({
@@ -256,7 +252,7 @@ class GuildData(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        guild: Guild | None = Guild.query.filter_by(guild_id = guild_id).first()
+        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
 
         if guild:
             return jsonify({
@@ -282,7 +278,7 @@ class GuildData(MethodView):
             return 'Forbidden.', 403
         
         post_data: dict = request.get_json()
-        guild: Guild | None = Guild.query.filter_by(guild_id = guild_id).first()
+        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
 
         if guild == None:
             guild = Guild(guild_id)
@@ -304,7 +300,7 @@ class GuildData(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        guild: Guild | None = Guild.query.filter_by(guild_id = guild_id).first()
+        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
 
         if guild:
             db.session.delete(guild)
@@ -334,7 +330,7 @@ class GuildConfig(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        guild: Guild | None = Guild.query.filter_by(guild_id = guild_id).first()
+        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
 
         if guild == None:
             guild = Guild(guild_id)
@@ -357,7 +353,7 @@ class GuildConfig(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        guild: Guild | None = Guild.query.filter_by(guild_id = guild_id).first()
+        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
 
         if guild == None:
             guild = Guild(guild_id)
@@ -393,7 +389,7 @@ class GuildConfig(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        guild: Guild | None = Guild.query.filter_by(guild_id = guild_id).first()
+        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
 
         if guild == None:
             guild = Guild(guild_id)
@@ -428,7 +424,7 @@ class GuildConfig(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        guild: Guild | None = Guild.query.filter_by(guild_id = guild_id).first()
+        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
 
         if guild == None:
             guild = Guild(guild_id)
@@ -452,7 +448,7 @@ class VerifyBypass(MethodView):
         post_data: dict = request.get_json()
         value = post_data.get('value')
 
-        db_user: GuildUser | None = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
+        db_user: GuildUser = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
 
         if db_user:
             db_user.bypass_verification = value is True
@@ -473,7 +469,7 @@ class VerifySetUserBanned(MethodView):
         post_data: dict = request.get_json()
         value = post_data.get('value')
 
-        db_user: GuildUser | None = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
+        db_user: GuildUser = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
 
         if db_user is None:
             db_user = GuildUser(guild_id, user_id)

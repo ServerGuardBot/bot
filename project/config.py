@@ -8,12 +8,12 @@ database_name = 'serverguard'
 with resources.path(
         'project', 'database.db'
     ) as sqlite_filepath:
-        DB_URI = f'sqlite:///{sqlite_filepath}'
+        DB_URI = f'sqlite:///{sqlite_filepath}?check_same_thread=False'
 
 with resources.path(
         'project', 'database_test.db'
     ) as sqlite_filepath:
-        DB_TESTURI = f'sqlite:///{sqlite_filepath}'
+        DB_TESTURI = f'sqlite:///{sqlite_filepath}?check_same_thread=False'
 
 class BaseConfig:
     """Base configuration."""

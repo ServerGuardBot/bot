@@ -3,8 +3,10 @@ from threading import Timer
 import time
 
 class Cache:
-    def __init__(self, expires_after: int = 300):
-        self.__cache = {}
+    def __init__(self, expires_after = 300, original_cache=None):
+        if original_cache is None:
+            original_cache = {}
+        self.__cache = original_cache
         self.__expire_after = expires_after
         self.__timer = Timer(1, self.__check)
         

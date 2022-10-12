@@ -62,7 +62,7 @@ async def evaluate_user(guild_id: str, user_id: str, connections: str):
     return {
         'Name': user.get('user').get('name'),
         'User_Id': user_id,
-        'User_Avatar': user.get('user').get('avatar'),
+        'User_Avatar': user.get('user').get('avatar') or 'https://img.guildedcdn.com/asset/Default/Gil-md.png',
         'Connection_Scores': scores,
         'Connections': socials,
         'VPN': using_vpn,
@@ -70,7 +70,7 @@ async def evaluate_user(guild_id: str, user_id: str, connections: str):
         'Score': round((total_score / total_evaled) * 100)
     }
 
-def generate_embed(evaluation: dict, passed_check: bool|None=None):
+def generate_embed(evaluation: dict, passed_check: bool=None):
     em: Embed = Embed(
         title=f'{evaluation["Name"]}\'s Evaluation',
         url=f'https://guilded.gg/profile/{evaluation["User_Id"]}',
@@ -96,7 +96,7 @@ def generate_embed(evaluation: dict, passed_check: bool|None=None):
 
     return em
 
-def eval_roblox(id: str | None):
+def eval_roblox(id: str):
     if id == None:
         return None
     result = requests.get(f'https://users.roblox.com/v1/users/{id}')
@@ -114,7 +114,7 @@ def eval_roblox(id: str | None):
     else:
         return None
 
-def eval_steam(id: int | None):
+def eval_steam(id: int):
     if id == None:
         return None
     result = requests.get(f'http://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key={bot_config.STEAM_KEY}&steamid={id}')
@@ -126,7 +126,7 @@ def eval_steam(id: int | None):
     else:
         return None
 
-def eval_youtube(id: str | None):
+def eval_youtube(id: str):
     if id == None:
         return None
     result = requests.get(f'https://www.googleapis.com/youtube/v3/channels?part=snippet&id={id}&key={bot_config.YOUTUBE_KEY}')
@@ -142,7 +142,7 @@ def eval_youtube(id: str | None):
     else:
         return None
 
-def eval_twitter(id: str | None):
+def eval_twitter(id: str):
     if id == None:
         return None
     result = requests.get(f'https://api.twitter.com/2/users/by/username/{id}?user.fields=created_at,verified,public_metrics', headers={

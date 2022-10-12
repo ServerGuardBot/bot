@@ -39,6 +39,7 @@ class GuildUser(db.Model):
         self.hashed_ip = hashed_ip
         self.browser_id = browser_id
         self.using_vpn = using_vpn
+        self.connections = connections
     
     def __repr__(self):
         return f'<GuildUser {self.internal_id}>'

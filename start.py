@@ -1,2 +1,1 @@
-import subprocess
-subprocess.call(['sh','bootstrap.sh'])
+from project import app
