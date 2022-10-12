@@ -69,7 +69,18 @@ class VerificationModule(Module):
             await ctx.reply(
                 embed=Embed(
                     title='Config Help',
-                    description='The following configuration options are available: verification_channel, logs_channel, verified_role, unverified_role, mod_role <add/remove>, admin_role <add/remove>\n NOTE: all role-related configurations expect a ROLE ID due to Guilded limitations.'
+                    description=
+'''
+The following configuration options are available:
+/config verification_channel
+/config logs_channel
+/config verified_role
+/config unverified_role
+/config mod_role <add/remove>
+/config admin_role <add/remove>
+
+NOTE: all role-related configurations expect a ROLE ID due to Guilded limitations.
+'''
                 )
             )
 
