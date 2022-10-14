@@ -1,3 +1,5 @@
+import random
+import string
 from project import db
 from datetime import datetime
 from sqlalchemy_json import NestedMutableJson
@@ -43,3 +45,26 @@ class GuildUser(db.Model):
     
     def __repr__(self):
         return f'<GuildUser {self.internal_id}>'
+
+class GuildUserStatus(db.Model):
+    """ Guild User Status model for storing guild user statuses """
+    __tablename__ = 'guilduserstatuses'
+
+    internal_id = db.Column(db.String(500), primary_key=True)
+    guild_id = db.Column(db.String(500), nullable=False)
+    user_id = db.Column(db.String(500), nullable=False)
+    type = db.Column(db.String(500), nullable=False)
+
+    ends_at = db.Column(db.DateTime, nullable=True)
+    value = db.Column(NestedMutableJson, nullable=False)
+
+    def __init__(self, guild_id: str, user_id: str, type: str, value: dict, ends_at: datetime=None):
+        self.internal_id = f'{guild_id}/{user_id}/{type}/{"".join(random.choices(string.ascii_letters, k=15))}'
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.type = type
+        self.value = value
+        self.ends_at = ends_at
+
+    def __repr__(self):
+        return f'<GuildUserStatus {self.internal_id}>'

@@ -19,6 +19,7 @@ requests = "*"
 humanfriendly = "*"
 python-dateutil = "*"
 flask-cors = "*"
+nsfw-detector = "*"
 
 [dev-packages]
 

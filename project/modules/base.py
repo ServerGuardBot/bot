@@ -1,4 +1,4 @@
-from guilded import Server, Member, User, Role
+from guilded import Server, Member, User
 from guilded.ext import commands
 from guilded.ext.commands import Context, CommandError
 
@@ -10,7 +10,7 @@ class Module:
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-    
+
     async def validate_permission_level(self, level: int, ctx: Context):
         allowed = True
         member = await ctx.guild.fetch_member(ctx.author.id)

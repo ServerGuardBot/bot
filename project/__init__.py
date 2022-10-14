@@ -1,7 +1,9 @@
+import asyncio
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import Embed, MessageEvent
-from guilded.ext import commands
+from guilded import MessageEvent, MemberJoinEvent, http
+from guilded.ext import commands, tasks
+from nsfw_detector import predict as nsfw_detect
 
 from project.modules.base import Module
 
@@ -25,6 +27,9 @@ import inspect
 import os
 import sys
 import ssl
+import requests
+import aiohttp
+
 ssl_context = ssl.create_default_context()
 # Sets up old and insecure TLSv1.
 ssl_context.options &= (
@@ -69,6 +74,11 @@ app.config.from_object(configs[app_settings])
 
 bot_config: project.config.BaseConfig = configs[app_settings] # A custom copy of the config for the bot side of things to access
 
+bot_api = http.HTTPClient()
+bot_api.token = app.config.get('GUILDED_BOT_TOKEN')
+
+nsfw_model = nsfw_detect.load_model('./project/ml_models/nsfw.h5')
+
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 cors = CORS(app, send_wildcard=True, origins="*")
@@ -76,12 +86,22 @@ cors = CORS(app, send_wildcard=True, origins="*")
 class BotClient(commands.Bot):
     config = app.config
     message_listeners: list = []
+    join_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
 
+async def run_bot_loop():
+    while True:
+        await asyncio.sleep(60)
+        requests.post('http://localhost:5000/moderation/expirestatuses', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+
 @client.event
 async def on_ready():
+    await client.wait_until_ready()
     print(f'Logged in as {client.user.name}')
+    client.loop.create_task(run_bot_loop())
     print('Bot ready')
 
 @client.event
@@ -92,6 +112,14 @@ async def on_message(event: MessageEvent):
             await callback(event.message)
         except Exception as e:
             print('Failed to run message listener:', e)
+
+@client.event
+async def on_member_join(event: MemberJoinEvent):
+    for callback in client.join_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run join listener:', e)
 
 print('Registering Modules')
 modules = [str(m) for m in sys.modules if m.startswith('modules.')]
@@ -133,5 +161,18 @@ app.logger.setLevel(gunicorn_logger.level)
 
 # Register the flask apis
 from project.server.api.verification import verification_blueprint
+from project.server.api.moderation import moderation_blueprint
 
 app.register_blueprint(verification_blueprint)
+app.register_blueprint(moderation_blueprint)
+
+if app_settings == 'DevelopmentConfig':
+    import threading
+    def run():
+        # Run the bot
+        client.run(app.config.get('GUILDED_BOT_TOKEN'))
+    
+    thread = threading.Thread(target=run)
+
+    thread.daemon = True
+    thread.start()

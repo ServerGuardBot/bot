@@ -2,16 +2,15 @@ import hashlib
 import random
 import string
 import jwt
-import requests
+import aiohttp
 
 from json import JSONEncoder
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
-from project import app, client, db, get_shared_state
+from project import app, bot_api, db, get_shared_state
 from project.helpers import user_evaluator, verif_token
 from project.helpers.Cache import Cache
 from project.server.models import Guild, GuildUser
-from sqlalchemy_json import TrackedDict
 
 from guilded import Embed
 
@@ -22,40 +21,27 @@ verification_blueprint = Blueprint('verification', __name__)
 
 verify_cache = Cache(60 * 10, shared_dict)
 
-class Role():
-    """Fake role class because for some ungodly reason the role functions expect a god damn object with an id"""
-
-    id: int
-
-    def __init__(self, id: int):
-        self.id = id
-
-def send_embed(channel_id, embed: Embed):
-    print(channel_id)
-    req = requests.post(f'https://www.guilded.gg/api/v1/channels/{channel_id}/messages', json={
+async def send_embed(channel_id, embed: Embed):
+    return await bot_api.create_channel_message(channel_id, payload={
         'embeds': [embed.to_dict()]
-    }, headers={
-        'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
     })
-    return req
 
 class VerifyUser(MethodView):
     """ User Verification Resource """
-    def get(self, t):
+    async def get(self, t):
         t = verify_cache.get(t)
         if t == None:
             return 'Bad request', 403
+        
+        bot_api.session = aiohttp.ClientSession()
 
         try:
             token = verif_token.decode_token(t)
 
-            guild = requests.get(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}', headers={
-                'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
-            }).json().get('server')
-            user = requests.get(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}/members/{token.user_id}', headers={
-                'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
-            }).json().get('member')
+            guild = (await bot_api.get_server(token.guild_id)).get('server')
+            user = (await bot_api.get_member(token.guild_id, token.user_id)).get('member')
 
+            await bot_api.session.close()
             return jsonify({
                 'guild_id': token.guild_id,
                 'guild_name': guild.get('name'),
@@ -65,10 +51,12 @@ class VerifyUser(MethodView):
                 'user_avatar': user.get('user').get('avatar') or 'https://img.guildedcdn.com/asset/Default/Gil-md.png',
             }), 200
         except jwt.ExpiredSignatureError:
+            await bot_api.session.close()
             return jsonify({
                 'message': 'Verification code expired, please generate a new one using /verify'
             }), 400
         except jwt.InvalidTokenError:
+            await bot_api.session.close()
             return jsonify({
                 'message': 'Invalid verification code, please generate one using /verify'
             }), 400
@@ -82,6 +70,8 @@ class VerifyUser(MethodView):
         post_data = request.get_json()
         browser_id = post_data.get('bi') or request.cookies.get('a')
         using_vpn = (post_data.get('v') or request.cookies.get('b')) != '0'
+
+        bot_api.session = aiohttp.ClientSession()
 
         try:
             token = verif_token.decode_token(t)
@@ -122,28 +112,23 @@ class VerifyUser(MethodView):
                 if user.bypass_verification:
                     # Bot-related process
                     if logs_channel is not None:
-                        send_embed(logs_channel, user_evaluator.generate_embed(
+                        await send_embed(logs_channel, user_evaluator.generate_embed(
                             await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
                             True
                         ))
                     if verified_role is not None:
                         try:
-                            requests.put(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}/members/{token.user_id}/roles/{verified_role}',
-                            headers={
-                                'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
-                            })
+                            await bot_api.assign_role_to_member(token.guild_id, token.user_id, verified_role)
                         except Exception as e:
                             print(f'Verified role exists for server {token.guild_id} but failed to give: {str(e)}')
                     if unverified_role is not None:
                         try:
-                            requests.delete(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}/members/{token.user_id}/roles/{unverified_role}',
-                            headers={
-                                'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
-                            })
+                            await bot_api.remove_role_from_member(token.guild_id, token.user_id, unverified_role)
                         except Exception as e:
                             print(f'Unverified role exists for server {token.guild_id} but failed to remove: {str(e)}')
                     # End of bot-related process
 
+                    await bot_api.session.close()
                     return jsonify({
                         'message': 'Verification success!'
                     }), 200
@@ -158,10 +143,11 @@ class VerifyUser(MethodView):
 
             if len(matching_hashes) > 0: # We found another user who was banned with a matching IP, reject them
                 if logs_channel is not None:
-                    send_embed(logs_channel, user_evaluator.generate_embed(
+                    await send_embed(logs_channel, user_evaluator.generate_embed(
                         await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
                         False
                     ))
+                await bot_api.session.close()
                 return jsonify({
                     'message': 'You are forbidden from entering this server'
                 }), 403
@@ -178,7 +164,7 @@ class VerifyUser(MethodView):
 
                 if len(matching_bids) > 0: # We found another user who was banned with a matching browser id, reject them
                     if logs_channel is not None:
-                        send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                        await send_embed(logs_channel, embed=user_evaluator.generate_embed(
                             await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
                             False
                         ))
@@ -188,36 +174,33 @@ class VerifyUser(MethodView):
 
             # Bot-related process
             if logs_channel is not None:
-                send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                await send_embed(logs_channel, embed=user_evaluator.generate_embed(
                     await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
                     True
                 ))
             if verified_role is not None:
                 try:
-                    requests.put(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}/members/{token.user_id}/roles/{verified_role}',
-                    headers={
-                        'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
-                    })
+                    await bot_api.assign_role_to_member(token.guild_id, token.user_id, verified_role)
                 except Exception as e:
                     print(f'Verified role exists for server {token.guild_id} but failed to give: {str(e)}')
             if unverified_role is not None:
                 try:
-                    requests.delete(f'https://www.guilded.gg/api/v1/servers/{token.guild_id}/members/{token.user_id}/roles/{unverified_role}',
-                    headers={
-                        'Authorization': f'Bearer {app.config.get("GUILDED_BOT_TOKEN")}'
-                    })
+                    await bot_api.remove_role_from_member(token.guild_id, token.user_id, unverified_role)
                 except Exception as e:
                     print(f'Unverified role exists for server {token.guild_id} but failed to remove: {str(e)}')
             # End of bot-related process
 
+            await bot_api.session.close()
             return jsonify({
                 'message': 'Verification success!'
             }), 200
         except jwt.ExpiredSignatureError:
+            await bot_api.session.close()
             return jsonify({
                 'message': 'Verification code expired, please generate a new one using /verify'
             }), 400
         except jwt.InvalidTokenError:
+            await bot_api.session.close()
             return jsonify({
                 'message': 'Invalid verification code, please generate one using /verify'
             }), 400
