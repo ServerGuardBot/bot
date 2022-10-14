@@ -27,7 +27,16 @@ class GeneralModule(Module):
         /config - Administrator, configure the bot's settings. Use /config help for more information
         /bypass `<user>` - Moderator+, allows a user to bypass verification
         /unbypass `<user>` - Moderator+, revokes a user's verification bypass
+        /ban <user> <timespan?> <reason> - Moderator+, bans a user for the specified reason, with an optional ban length
+        /unban <user> - Moderator+, unbans a user from the server
+        /mute <user> <timespan?> <reason> - Moderator+, mutes a user in the server, with an optional mute length
+        /unmute <user> - Moderator+, unmutes a user in the server
+        /warn <user> <timespan?> <reason> - Moderator+, warns a user in the server, with an option for when it expires
+        /warnings <user> - Moderator+, view a user's warnings
+        /delwarn <user> <id?> - Moderator+, delete a user's warnings, optionally only a specific warning by specifying its id
         /commands - brings up this help text
+
+        NOTE: Timespans are precise to the *exact day* not hours or minutes due to technical limitations.
         '''
             ))
 
