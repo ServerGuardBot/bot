@@ -1,8 +1,9 @@
 from project.modules.base import Module
 from project import bot_config
 from guilded.ext import commands
-from guilded import Embed
+from guilded import Embed, http
 
+import os
 import requests
 
 member = commands.MemberConverter()
@@ -14,6 +15,9 @@ class GeneralModule(Module):
 
     def initialize(self):
         bot = self.bot
+
+        self.bot_api = http.HTTPClient()
+        self.bot_api.token = os.getenv('GUILDED_BOT_TOKEN')
 
         # Register help command
         @bot.command(name='commands')
@@ -71,12 +75,12 @@ class GeneralModule(Module):
         @config.command(name='mute_role')
         async def config_mute_role(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = target #await role.convert(ctx, target)
+            ref = await self.convert_role(ctx, target) #target #await role.convert(ctx, target)
             # NOTE: just gotta hope to god that the user inputs a role id because guilded dum
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/mute_role', json={
-                    'value': ref
+                    'value': ref['id']
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -89,11 +93,11 @@ class GeneralModule(Module):
         @config.command(name='verification_channel')
         async def config_verif_channel(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = await channel.convert(ctx, target)
+            ref = await self.convert_channel(ctx, target)
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verification_channel', json={
-                    'value': ref.id
+                    'value': ref['id']
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -102,15 +106,17 @@ class GeneralModule(Module):
                     await ctx.reply('Successfully changed verification channel.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='nsfw_logs_channel')
         async def config_nsfw_logs_channel(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = await channel.convert(ctx, target)
+            ref = await self.convert_channel(ctx, target)
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/nsfw_logs_channel', json={
-                    'value': ref.id
+                    'value': ref['id']
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -119,6 +125,8 @@ class GeneralModule(Module):
                     await ctx.reply('Successfully changed NSFW logs channel.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='disable_nsfw')
         async def config_disable_nsfw(ctx: commands.Context):
@@ -138,11 +146,11 @@ class GeneralModule(Module):
         @config.command(name='logs_channel')
         async def config_logs_channel(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = await channel.convert(ctx, target)
+            ref = await self.convert_channel(ctx, target)
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/logs_channel', json={
-                    'value': ref.id
+                    'value': ref['id']
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -151,16 +159,17 @@ class GeneralModule(Module):
                     await ctx.reply('Successfully changed logs channel.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='verified_role')
         async def config_verified_role(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = target #await role.convert(ctx, target)
-            # NOTE: just gotta hope to god that the user inputs a role id because guilded dum
+            ref = await self.convert_role(ctx, target)
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verified_role', json={
-                    'value': ref
+                    'value': ref['id']
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -169,16 +178,17 @@ class GeneralModule(Module):
                     await ctx.reply('Successfully changed verified role.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid role!')
         
         @config.command(name='unverified_role')
         async def config_unverified_role(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = target #await role.convert(ctx, target)
-            # NOTE: just gotta hope to god that the user inputs a role id because guilded dum
+            ref = await self.convert_role(ctx, target)
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/unverified_role', json={
-                    'value': ref
+                    'value': ref['id']
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -187,6 +197,8 @@ class GeneralModule(Module):
                     await ctx.reply('Successfully changed unverified role.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid role!')
         
         @config.group(name='mod_role')
         async def mod_role(ctx: commands.Context):
@@ -195,13 +207,12 @@ class GeneralModule(Module):
         @mod_role.command(name='add')
         async def mod_add(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = target #await role.convert(ctx, target)
-            # NOTE: just gotta hope to god that the user inputs a role id because guilded dum
+            ref = await self.convert_role(ctx, target)
 
             if ref is not None:
                 result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
-                        'id': ref,
+                        'id': ref['id'],
                         'level': 0
                     }
                 }, headers={
@@ -214,17 +225,18 @@ class GeneralModule(Module):
                     await ctx.reply('This is already a mod role.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid role!')
         
         @mod_role.command(name='remove')
         async def mod_remove(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = target #await role.convert(ctx, target)
-            # NOTE: just gotta hope to god that the user inputs a role id because guilded dum
+            ref = await self.convert_role(ctx, target)
 
             if ref is not None:
                 result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
-                        'id': ref,
+                        'id': ref['id'],
                         'level': 0
                     }
                 }, headers={
@@ -237,6 +249,8 @@ class GeneralModule(Module):
                     await ctx.reply('This is not a mod role.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid role!')
         
         @config.group(name='admin_role')
         async def admin_role(ctx: commands.Context):
@@ -245,13 +259,12 @@ class GeneralModule(Module):
         @admin_role.command(name='add')
         async def admin_add(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = target #await role.convert(ctx, target)
-            # NOTE: just gotta hope to god that the user inputs a role id because guilded dum
+            ref = await self.convert_role(ctx, target)
 
             if ref is not None:
                 result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
-                        'id': ref,
+                        'id': ref['id'],
                         'level': 1
                     }
                 }, headers={
@@ -264,17 +277,18 @@ class GeneralModule(Module):
                     await ctx.reply('This is already an admin role.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid role!')
         
         @admin_role.command(name='remove')
         async def admin_remove(ctx: commands.Context, target: str):
             await self.validate_permission_level(2, ctx)
-            ref = target #await role.convert(ctx, target)
-            # NOTE: just gotta hope to god that the user inputs a role id because guilded dum
+            ref = await self.convert_role(ctx, target)
 
             if ref is not None:
                 result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
-                        'id': ref,
+                        'id': ref['id'],
                         'level': 1
                     }
                 }, headers={
@@ -287,3 +301,5 @@ class GeneralModule(Module):
                     await ctx.reply('This is not an admin role.')
                 else:
                     await ctx.reply('An unknown error occurred while performing this action.')
+            else:
+                await ctx.reply('Please specify a valid role!')

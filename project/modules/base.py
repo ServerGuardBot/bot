@@ -1,15 +1,112 @@
-from guilded import Server, Member, User
+import os
+from guilded import Server, Member, User, http
 from guilded.ext import commands
 from guilded.ext.commands import Context, CommandError
+from project.helpers.Cache import Cache
 
 import requests
+import aiohttp
+import re
+
+guild_info_cache = Cache(20)
+
+MEMBER_REGEX = r'@([\d\w]+)'
+CHANNEL_REGEX = r'#([\d\w]+)'
 
 class Module:
     bot: commands.Bot
     name = None
+    bot_api: http.HTTPClient
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+        self.bot_api = http.HTTPClient()
+        self.bot_api.token = os.getenv('GUILDED_BOT_TOKEN')
+
+    async def get_guild_info(self, guild_id: str):
+        cached = guild_info_cache.get(guild_id)
+
+        if cached:
+            return cached
+        else:
+            self.bot_api.session = aiohttp.ClientSession()
+            cached = (await self.bot_api.request(http.Route('GET', f'/teams/{guild_id}/info', override_base=http.Route.USER_BASE))).get('team')
+            guild_info_cache.set(guild_id, cached)
+            await self.bot_api.session.close()
+            return cached
+
+    async def get_ctx_members(self, ctx: commands.Context):
+        guild_id = ctx.server.id
+        cached = guild_info_cache.get(f'{guild_id}/members')
+
+        if cached:
+            return cached.get('members')
+        else:
+            self.bot_api.session = aiohttp.ClientSession()
+            cached = await self.bot_api.request(http.Route('GET', f'/teams/{guild_id}/members', override_base=http.Route.USER_BASE))
+            guild_info_cache.set(guild_id, cached)
+            await self.bot_api.session.close()
+            return cached.get('members')
+
+    async def get_ctx_roles(self, ctx: commands.Context):
+        guild_id = ctx.server.id
+        guild = await self.get_guild_info(guild_id)
+
+        roleList = []
+        roles: dict = guild.get('rolesById', {})
+
+        for key in roles.keys():
+            roleList.append(roles.get(key))
+        
+        return roleList
+
+    async def get_ctx_channels(self, ctx: commands.Context):
+        guild_id = ctx.server.id
+        group_id = ctx.channel.group_id
+
+        return ctx.server.channels
+
+    async def convert_member(self, ctx: commands.Context, member: str):
+        match: re.Match = re.search(MEMBER_REGEX, member)
+        member_id = match is not None and match.group(1) or member
+
+        if member_id is not None:
+            member = member_id
+        member_list = await self.get_ctx_members(ctx)
+        for item in member_list:
+            if item['id'] == member or item['name'] == member:
+                return await ctx.server.getch_member(item['id'])
+    
+    async def convert_channel(self, ctx: commands.Context, channel: str):
+        match: re.Match = re.search(CHANNEL_REGEX, channel)
+        channel_id = match is not None and match.group(1) or channel
+
+        if channel_id is not None:
+            channel = channel_id
+        channel_list = await self.get_ctx_channels(ctx)
+        print(channel_list)
+        for item in channel_list:
+            if item.id == channel or item.name == channel:
+                return {
+                    'id': item.id
+                } #await self.bot.getch_channel(item.id)
+        res = await self.bot.getch_channel(channel)
+        if res:
+            return {
+                'id': res.id
+            }
+    
+    async def convert_role(self, ctx: commands.Context, role: str):
+        match: re.Match = re.search(MEMBER_REGEX, role)
+        role_id = match is not None and match.group(1) or role
+
+        if role_id is not None:
+            role = role_id
+        role_list = await self.get_ctx_roles(ctx)
+        for item in role_list:
+            if item['id'] == role or item['name'] == role:
+                return item
 
     async def validate_permission_level(self, level: int, ctx: Context):
         allowed = True

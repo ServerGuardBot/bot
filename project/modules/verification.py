@@ -22,7 +22,7 @@ class VerificationModule(Module):
         @bot.command()
         async def evaluate(ctx: commands.Context, target: str=None):
             await self.validate_permission_level(1, ctx)
-            user = target == None and ctx.author or await member.convert(ctx, target)
+            user = target == None and ctx.author or await self.convert_member(ctx, target)
             if user.bot:
                 pass # We know bots aren't real users lol
             links = await social_links.get_connections(ctx.guild.id, user.id)
@@ -62,7 +62,7 @@ class VerificationModule(Module):
         @bot.command()
         async def bypass(ctx: commands.Context, target: str):
             await self.validate_permission_level(1, ctx)
-            user = await member.convert(ctx, target)
+            user = await self.convert_member(ctx, target)
             if user.bot:
                 pass # We know bots aren't real users lol
             result = requests.patch(f'http://localhost:5000/verify/bypass/{ctx.server.id}/{user.id}', json={
@@ -79,7 +79,7 @@ class VerificationModule(Module):
         @bot.command()
         async def unbypass(ctx: commands.Context, target: str):
             await self.validate_permission_level(1, ctx)
-            user = await member.convert(ctx, target)
+            user = await self.convert_member(ctx, target)
             if user.bot:
                 pass # We know bots aren't real users lol
             result = requests.patch(f'http://localhost:5000/verify/bypass/{ctx.server.id}/{user.id}', json={

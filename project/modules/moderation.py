@@ -20,7 +20,7 @@ class ModerationModule(Module):
         @bot.command()
         async def ban(ctx: commands.Context, target: str, timespan: str=None, *_reason):
             await self.validate_permission_level(1, ctx)
-            user = await member.convert(ctx, target)
+            user = self.convert_member(ctx, target)
 
             if await self.is_moderator(user):
                 ctx.reply('This user is a moderator, I can\'t do that!')
@@ -77,7 +77,7 @@ class ModerationModule(Module):
         @bot.command()
         async def mute(ctx: commands.Context, target: str, timespan: str=None, *_reason):
             await self.validate_permission_level(1, ctx)
-            user = await member.convert(ctx, target)
+            user = await self.convert_member(ctx, target)
 
             bot_api.session = aiohttp.ClientSession()
 
@@ -127,7 +127,7 @@ class ModerationModule(Module):
         @bot.command()
         async def unmute(ctx: commands.Context, target: str):
             await self.validate_permission_level(1, ctx)
-            user = await member.convert(ctx, target)
+            user = await self.convert_member(ctx, target)
 
             bot_api.session = aiohttp.ClientSession()
 
@@ -146,7 +146,7 @@ class ModerationModule(Module):
         @bot.command()
         async def warn(ctx: commands.Context, target: str, timespan: str=None, *_reason):
             await self.validate_permission_level(1, ctx)
-            user = await member.convert(ctx, target)
+            user = await self.convert_member(ctx, target)
 
             guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
                 'authorization': bot_config.SECRET_KEY
@@ -187,7 +187,7 @@ class ModerationModule(Module):
         @bot.command()
         async def warnings(ctx: commands.Context, target: str):
             await self.validate_permission_level(1, ctx)
-            user = await member.convert(ctx, target)
+            user = await self.convert_member(ctx, target)
 
             result = requests.get(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/warnings', headers={
                 'authorization': bot_config.SECRET_KEY
@@ -202,7 +202,7 @@ class ModerationModule(Module):
         @bot.command()
         async def delwarn(ctx: commands.Context, target: str, id: str=None):
             await self.validate_permission_level(1, ctx)
-            user = await member.convert(ctx, target)
+            user = await self.convert_member(ctx, target)
 
             if id:
                 result = requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/warnings/{id}', headers={
