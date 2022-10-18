@@ -20,6 +20,11 @@ humanfriendly = "*"
 python-dateutil = "*"
 flask-cors = "*"
 nsfw-detector = "*"
+joblib = "*"
+numpy = "*"
+sklearn = "*"
+python-levenshtein = "*"
+better-profanity = "*"
 
 [dev-packages]
 

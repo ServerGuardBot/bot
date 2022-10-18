@@ -1,14 +1,14 @@
 from datetime import datetime
-import string
 from project.modules.base import Module
 from project.helpers.Cache import Cache
 from project import bot_config, nsfw_model, nsfw_detect
-from guilded.ext import commands
-from guilded import Embed, ChatMessage, Colour, MemberJoinEvent
+from guilded import Embed, ChatMessage, Colour, MemberJoinEvent, http
 from os import remove
 
 import random
 import requests
+import os
+import string
 
 settings_cache = Cache(60)
 
@@ -56,11 +56,15 @@ class NSFWModule(Module):
     def initialize(self):
         bot = self.bot
 
+        self.bot_api = http.HTTPClient()
+        self.bot_api.token = os.getenv('BOT_KEY')
+
         async def on_member_join(event: MemberJoinEvent):
             member = event.member
             if member.avatar is not None:
                 logs_channel_id = self.get_logs_channel(event.server_id)
-                if logs_channel_id and logs_channel_id != '':
+                premium_status = await self.get_user_premium_status(event.server.owner_id)
+                if logs_channel_id and logs_channel_id != '' and premium_status is not 0:
                     classification, certainty = self.scan_image(member.avatar.aws_url)
 
                     if classification == 'NSFW':
@@ -89,7 +93,8 @@ class NSFWModule(Module):
 
         async def on_message(message: ChatMessage):
             logs_channel_id = self.get_logs_channel(message.guild.id)
-            if logs_channel_id and logs_channel_id != '':
+            premium_status = await self.get_user_premium_status(message.server.owner_id)
+            if logs_channel_id and logs_channel_id != '' and premium_status is not 0:
                 for item in message.attachments:
                     if any(f'.{ele}' in item.url for ele in ['jpeg', 'jpg', 'tif', 'tiff', 'gif', 'jif', 'png', 'webp', 'bmp', 'apng']):
                         classification, certainty = self.scan_image(item.url)

@@ -1,0 +1,5 @@
+IMAGE_DENIED = 'https://img.guildedcdn.com/asset/GenericMessages/denied.png'
+IMAGE_DEFAULT_AVATAR = 'https://img.guildedcdn.com/asset/Default/Gil-md.png'
+IMAGE_SUB_COPPER = 'https://img.guildedcdn.com/asset/ServerSubscriptions/fancy_copper_128x128.png'
+IMAGE_SUB_SILVER = 'https://img.guildedcdn.com/asset/ServerSubscriptions/fancy_silver_128x128.png'
+IMAGE_SUB_GOLD = 'https://img.guildedcdn.com/asset/ServerSubscriptions/fancy_gold_128x128.png'

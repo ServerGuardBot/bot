@@ -21,5 +21,6 @@ def on_starting(server):
 def on_exit(server):
     loop = client.loop
     print("Attempting to stop bot thread", flush=True)
-    loop.run_until_complete(client.close())
+    loop.stop()
+    loop.close()
     print(f'Bot thread alive status: {thread.is_alive()}', flush=True)

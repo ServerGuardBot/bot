@@ -2,6 +2,7 @@ from datetime import datetime
 from dateutil import parser
 from json import JSONDecoder
 from project import client, bot_config
+from project.helpers.images import *
 from guilded import Embed, User
 from humanfriendly import format_timespan
 import requests, guilded
@@ -62,7 +63,7 @@ async def evaluate_user(guild_id: str, user_id: str, connections: str):
     return {
         'Name': user.get('user').get('name'),
         'User_Id': user_id,
-        'User_Avatar': user.get('user').get('avatar') or 'https://img.guildedcdn.com/asset/Default/Gil-md.png',
+        'User_Avatar': user.get('user').get('avatar') or IMAGE_DEFAULT_AVATAR,
         'Connection_Scores': scores,
         'Connections': socials,
         'VPN': using_vpn,

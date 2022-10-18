@@ -23,7 +23,9 @@ class BaseConfig:
     TWITTER_KEY = os.getenv('TWITTER_KEY', 'twitter_key')
     TWITTER_SECRET = os.getenv('TWITTER_SECRET', 'twitter_secret')
     TWITTER_BEARER = os.getenv('TWITTER_BEARER', 'twitter_bearer')
+    PROXYCHECK_KEY = os.getenv('PROXYCHECK_KEY', 'proxycheck')
     
+    PROJECT_ROOT = os.getenv('PROJECT_ROOT', '/root/serverguard')
     SECRET_KEY = os.getenv('SECRET_KEY', 'is_this_secret')
     DB_PASS = os.getenv('DB_PASS', 'is_this_db_pass')
     DB_USER = os.getenv('DB_USER', 'origin')

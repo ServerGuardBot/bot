@@ -8,7 +8,9 @@ import requests
 import aiohttp
 import re
 
+guild_data_cache = Cache(60)
 guild_info_cache = Cache(20)
+premium_cache = Cache()
 
 MEMBER_REGEX = r'@([\d\w]+)'
 CHANNEL_REGEX = r'#([\d\w]+)'
@@ -22,7 +24,21 @@ class Module:
         self.bot = bot
 
         self.bot_api = http.HTTPClient()
-        self.bot_api.token = os.getenv('GUILDED_BOT_TOKEN')
+        self.bot_api.token = os.getenv('BOT_KEY')
+
+    def get_guild_data(self, guild_id: str):
+        from project import bot_config
+        cached = guild_data_cache.get(guild_id)
+
+        if cached:
+            return cached
+        else:
+            guild_data_req = requests.get(f'http://localhost:5000/guilddata/{guild_id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            cached: dict = guild_data_req.json()
+            guild_data_cache.set(guild_id, cached)
+            return cached
 
     async def get_guild_info(self, guild_id: str):
         cached = guild_info_cache.get(guild_id)
@@ -107,6 +123,36 @@ class Module:
         for item in role_list:
             if item['id'] == role or item['name'] == role:
                 return item
+    
+    async def get_user_premium_status(self, user_id):
+        cached = premium_cache.get(user_id)
+        if cached is not None:
+            return cached
+        self.bot_api.session = aiohttp.ClientSession()
+        try:
+            roles = await self.bot_api.get_member_roles('aE9Zg6Kj', user_id)
+        except Exception:
+            roles = None
+        if roles is not None:
+            roles = roles['roleIds']
+        else:
+            roles = []
+
+        if 32612283 in roles:
+            cached = 3
+        elif 32612284 in roles:
+            cached = 2
+        elif 32612285 in roles:
+            cached = 1
+        else:
+            cached = 0
+        
+        premium_cache.set(user_id, cached)
+        await self.bot_api.session.close()
+        return cached
+    
+    def reset_user_premium_cache(self, user_id):
+        premium_cache.remove(user_id)
 
     async def validate_permission_level(self, level: int, ctx: Context):
         allowed = True

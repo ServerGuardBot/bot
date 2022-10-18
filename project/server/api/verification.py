@@ -3,6 +3,7 @@ import random
 import string
 import jwt
 import aiohttp
+import requests
 
 from json import JSONEncoder
 from flask import Blueprint, request, jsonify
@@ -10,16 +11,21 @@ from flask.views import MethodView
 from project import app, bot_api, db, get_shared_state
 from project.helpers import user_evaluator, verif_token
 from project.helpers.Cache import Cache
+from project.helpers.images import *
+from project.helpers.premium import get_user_premium_status
+from project.helpers.verify_browseragent import verify_browseragent
 from project.server.models import Guild, GuildUser
 
-from guilded import Embed
+from guilded import Embed, Server
 
 shared_dict, shared_lock = get_shared_state(port=35792, key=b"verification")
+shared_ip_cache, shared_ip_lock = get_shared_state(port=35793, key=b"verification_ip")
 
 encoder = JSONEncoder()
 verification_blueprint = Blueprint('verification', __name__)
 
 verify_cache = Cache(60 * 10, shared_dict)
+ip_cache = Cache(300, shared_ip_cache)
 
 async def send_embed(channel_id, embed: Embed):
     return await bot_api.create_channel_message(channel_id, payload={
@@ -45,10 +51,10 @@ class VerifyUser(MethodView):
             return jsonify({
                 'guild_id': token.guild_id,
                 'guild_name': guild.get('name'),
-                'guild_avatar': guild.get('avatar') or 'https://img.guildedcdn.com/asset/Default/Gil-md.png',
+                'guild_avatar': guild.get('avatar') or IMAGE_DEFAULT_AVATAR,
                 'user_id': token.user_id,
                 'user_name': user.get('user').get('name'),
-                'user_avatar': user.get('user').get('avatar') or 'https://img.guildedcdn.com/asset/Default/Gil-md.png',
+                'user_avatar': user.get('user').get('avatar') or IMAGE_DEFAULT_AVATAR,
             }), 200
         except jwt.ExpiredSignatureError:
             await bot_api.session.close()
@@ -77,9 +83,11 @@ class VerifyUser(MethodView):
             token = verif_token.decode_token(t)
             hashed_ip = hashlib.sha512(request.environ.get('HTTP_X_REAL_IP', request.remote_addr).encode('utf-8')).hexdigest()
 
+            db_guild: dict = (await bot_api.get_server(token.guild_id)).get('server')
             guild: Guild = Guild.query.filter_by(guild_id = token.guild_id).first()
 
-            verification_channel = guild.config.get('verification_channel')
+            premium_status = await get_user_premium_status(db_guild.get('ownerId'))
+
             logs_channel = guild.config.get('logs_channel')
 
             verified_role = guild.config.get('verified_role')
@@ -109,29 +117,78 @@ class VerifyUser(MethodView):
                     db.session.add(user)
                     db.session.commit()
 
-                if user.bypass_verification:
-                    # Bot-related process
-                    if logs_channel is not None:
-                        await send_embed(logs_channel, user_evaluator.generate_embed(
-                            await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
-                            True
-                        ))
-                    if verified_role is not None:
-                        try:
-                            await bot_api.assign_role_to_member(token.guild_id, token.user_id, verified_role)
-                        except Exception as e:
-                            print(f'Verified role exists for server {token.guild_id} but failed to give: {str(e)}')
-                    if unverified_role is not None:
-                        try:
-                            await bot_api.remove_role_from_member(token.guild_id, token.user_id, unverified_role)
-                        except Exception as e:
-                            print(f'Unverified role exists for server {token.guild_id} but failed to remove: {str(e)}')
-                    # End of bot-related process
+            if user.bypass_verification:
+                # Bot-related process
+                if logs_channel is not None:
+                    await send_embed(logs_channel, user_evaluator.generate_embed(
+                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                        True
+                    ))
+                if verified_role is not None:
+                    try:
+                        await bot_api.assign_role_to_member(token.guild_id, token.user_id, verified_role)
+                    except Exception as e:
+                        print(f'Verified role exists for server {token.guild_id} but failed to give: {str(e)}')
+                if unverified_role is not None:
+                    try:
+                        await bot_api.remove_role_from_member(token.guild_id, token.user_id, unverified_role)
+                    except Exception as e:
+                        print(f'Unverified role exists for server {token.guild_id} but failed to remove: {str(e)}')
+                # End of bot-related process
 
-                    await bot_api.session.close()
-                    return jsonify({
-                        'message': 'Verification success!'
-                    }), 200
+                await bot_api.session.close()
+                return jsonify({
+                    'message': 'Verification success!'
+                }), 200
+            
+            if not verify_browseragent(request.user_agent.string):
+                # Possibly not a browser, reject it
+                if logs_channel is not None:
+                    await send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                        False
+                    ))
+                return jsonify({
+                    'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
+                }), 403
+
+            ip = request.environ.get("HTTP_X_REAL_IP", request.remote_addr)
+            cached_ip = ip_cache.get(f'{token.guild_id}/{ip}')
+            if cached_ip is None:
+                cached_ip = 1
+            ip_cache.set(f'{token.guild_id}/{ip}', cached_ip + 1)
+
+            if cached_ip >= 3:
+                # Reject due to too many verification requests
+                if logs_channel is not None:
+                    await send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                        False
+                    ))
+                return jsonify({
+                    'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
+                }), 403
+
+            if premium_status > 0:
+                # Do an advanced proxy check
+                proxy_request = requests.get(f'https://proxycheck.io/v2/{ip}?key={app.config.get("PROXYCHECK_KEY")}&vpn=1&risk=1')
+                if proxy_request.status_code == 200:
+                    data = proxy_request.json().get(ip, {
+                        'proxy': 'no',
+                        'risk': 0
+                    })
+                    using_vpn = data.get('proxy') == 'yes'
+                    risk = data.get('risk') or 0
+                    if risk >= 67 or (risk >= 34 and using_vpn):
+                        # Block the verification
+                        if logs_channel is not None:
+                            await send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                                await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                                False
+                            ))
+                        return jsonify({
+                            'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
+                        }), 403
 
             # Compare IP hash against database of banned users in this guild that aren't the user being verified
             matching_hashes = db.session.query(GuildUser).filter(
@@ -356,6 +413,10 @@ class GuildConfig(MethodView):
                 if encoder.encode(i) == jval:
                     exists = True
                     break
+            else:
+                if i == value:
+                    exists = True
+                    break
         if exists:
             return jsonify({'message': 'Value already exists in key'}), 400
         else:
@@ -390,6 +451,11 @@ class GuildConfig(MethodView):
         for i in curr:
             if type(value) is dict:
                 if encoder.encode(i) == jval:
+                    removed = True
+                    curr.remove(i)
+                    break
+            else:
+                if i == value:
                     removed = True
                     curr.remove(i)
                     break

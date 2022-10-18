@@ -1,9 +1,9 @@
-import asyncio
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import MessageEvent, MemberJoinEvent, http
-from guilded.ext import commands, tasks
+from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MemberJoinEvent, MemberRemoveEvent, http
+from guilded.ext import commands
 from nsfw_detector import predict as nsfw_detect
+from zipfile import ZipFile
 
 from project.modules.base import Module
 
@@ -21,6 +21,8 @@ import project.server
 import project.modules
 import project.config
 
+import asyncio
+import io
 import importlib
 import logging
 import inspect
@@ -28,7 +30,7 @@ import os
 import sys
 import ssl
 import requests
-import aiohttp
+import csv
 
 ssl_context = ssl.create_default_context()
 # Sets up old and insecure TLSv1.
@@ -77,7 +79,7 @@ bot_config: project.config.BaseConfig = configs[app_settings] # A custom copy of
 bot_api = http.HTTPClient()
 bot_api.token = app.config.get('GUILDED_BOT_TOKEN')
 
-nsfw_model = nsfw_detect.load_model('./project/ml_models/nsfw.h5')
+nsfw_model = nsfw_detect.load_model(app.config.get('PROJECT_ROOT') + '/project/ml_models/nsfw.h5')
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -87,8 +89,31 @@ class BotClient(commands.Bot):
     config = app.config
     message_listeners: list = []
     join_listeners: list = []
+    leave_listeners: list = []
+    message_update_listeners: list = []
+    message_delete_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
+
+malicious_urls = {}
+
+def load_malicious_url_db():
+    req = requests.get('https://urlhaus.abuse.ch/downloads/csv/')
+    zip = ZipFile(io.BytesIO(req.content))
+    item = zip.open('csv.txt')
+    reader = csv.reader(io.TextIOWrapper(item, 'utf-8'))
+    malicious_urls.clear()
+    for row in reader:
+        if len(row) < 2 or ('id' in row[0]):
+            continue
+        url = row[2]
+        threat = row[5]
+        malicious_urls[url] = threat
+
+async def run_url_db_dl():
+    while True:
+        await asyncio.sleep(60 * 10)
+        load_malicious_url_db()
 
 async def run_bot_loop():
     while True:
@@ -97,11 +122,14 @@ async def run_bot_loop():
             'authorization': bot_config.SECRET_KEY
         })
 
+load_malicious_url_db()
+
 @client.event
 async def on_ready():
     await client.wait_until_ready()
     print(f'Logged in as {client.user.name}')
     client.loop.create_task(run_bot_loop())
+    client.loop.create_task(run_url_db_dl())
     print('Bot ready')
 
 @client.event
@@ -120,6 +148,30 @@ async def on_member_join(event: MemberJoinEvent):
             await callback(event)
         except Exception as e:
             print('Failed to run join listener:', e)
+
+@client.event
+async def on_member_remove(event: MemberRemoveEvent):
+    for callback in client.leave_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run leave listener:', e)
+
+@client.event
+async def on_message_update(event: MessageUpdateEvent):
+    for callback in client.message_update_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run message update listener:', e)
+
+@client.event
+async def on_message_delete(event: MessageDeleteEvent):
+    for callback in client.message_delete_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run message delete listener:', e)
 
 print('Registering Modules')
 modules = [str(m) for m in sys.modules if m.startswith('modules.')]
