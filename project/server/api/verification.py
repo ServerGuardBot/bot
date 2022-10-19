@@ -16,7 +16,7 @@ from project.helpers.premium import get_user_premium_status
 from project.helpers.verify_browseragent import verify_browseragent
 from project.server.models import Guild, GuildUser
 
-from guilded import Embed, Server
+from guilded import Embed
 
 shared_dict, shared_lock = get_shared_state(port=35792, key=b"verification")
 shared_ip_cache, shared_ip_lock = get_shared_state(port=35793, key=b"verification_ip")

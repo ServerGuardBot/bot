@@ -443,7 +443,7 @@ class ModerationModule(Module):
             else:
                 logs_channel = None
             
-            if config.get('automod_duplicate', 0) == 1:
+            if config.get('automod_duplicate', 0) == 1 and len(message.content) > 5:
                 if repeats(message.content):
                     await message.reply(embed=EMBED_FILTERED(message.author, 'Duplicate text'), private=True)
                     await message.delete()
