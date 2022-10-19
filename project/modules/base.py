@@ -12,8 +12,8 @@ guild_data_cache = Cache(60)
 guild_info_cache = Cache(20)
 premium_cache = Cache()
 
-MEMBER_REGEX = r'@([\d\w]+)'
-CHANNEL_REGEX = r'#([\d\w]+)'
+MEMBER_REGEX = r'@(.+)'
+CHANNEL_REGEX = r'#(.+)'
 
 class Module:
     bot: commands.Bot
@@ -119,11 +119,32 @@ class Module:
 
         if role_id is not None:
             role = role_id
+        role_int = 0
+        try:
+            role_int = int(role)
+        except Exception:
+            pass
         role_list = await self.get_ctx_roles(ctx)
         for item in role_list:
-            if item['id'] == role or item['name'] == role:
+            if item['id'] == role_int or item['name'] == role:
                 return item
     
+    async def user_can_manage_server(self, member: Member):
+        guild_id = member.guild.id
+        guild = await self.get_guild_info(guild_id)
+
+        roles: dict = guild.get('rolesById', {})
+        user_role_ids: list = await member.fetch_role_ids()
+        for id in roles:
+            role: dict = roles[id]
+            if role['id'] in user_role_ids:
+                perms: dict = role.get('permissions')
+                if perms is not None:
+                    MANAGE_SERVER_HEX = 4
+                    if (perms.get('general', 0) & MANAGE_SERVER_HEX) == MANAGE_SERVER_HEX:
+                        return True
+        return False
+
     async def get_user_premium_status(self, user_id):
         cached = premium_cache.get(user_id)
         if cached is not None:
@@ -178,6 +199,8 @@ class Module:
         from project import bot_config
         if user.id == user.guild.owner.id:
             return True # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
+        if await self.user_can_manage_server(user):
+            return True
 
         role_config_req = requests.get(f'http://localhost:5000/guilddata/{user.guild.id}/cfg/roles', headers={
             'authorization': bot_config.SECRET_KEY
@@ -199,6 +222,8 @@ class Module:
         from project import bot_config
         if user.id == user.guild.owner.id:
             return True # We know the owner of the guild is an admin, bypass any unnecessary calls and checks
+        if await self.user_can_manage_server(user):
+            return True
 
         role_config_req = requests.get(f'http://localhost:5000/guilddata/{user.guild.id}/cfg/roles', headers={
             'authorization': bot_config.SECRET_KEY

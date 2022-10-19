@@ -128,7 +128,8 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.command(name='mute_role')
-        async def config_mute_role(ctx: commands.Context, target: str):
+        async def config_mute_role(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target) #target #await role.convert(ctx, target)
             # NOTE: just gotta hope to god that the user inputs a role id because guilded dum
@@ -146,7 +147,8 @@ class GeneralModule(Module):
                     await ctx.reply('An unknown error occurred while performing this action.')
 
         @config.command(name='verification_channel')
-        async def config_verif_channel(ctx: commands.Context, target: str):
+        async def config_verif_channel(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
 
@@ -165,7 +167,8 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='nsfw_logs_channel')
-        async def config_nsfw_logs_channel(ctx: commands.Context, target: str):
+        async def config_nsfw_logs_channel(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             premium_status = await self.get_user_premium_status(ctx.server.owner_id)
             if premium_status is 0:
@@ -203,7 +206,8 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.command(name='message_logs_channel')
-        async def config_message_logs_channel(ctx: commands.Context, target: str):
+        async def config_message_logs_channel(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
 
@@ -222,7 +226,8 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='traffic_logs_channel')
-        async def config_traffic_logs_channel(ctx: commands.Context, target: str):
+        async def config_traffic_logs_channel(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
 
@@ -241,7 +246,8 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
 
         @config.command(name='logs_channel')
-        async def config_logs_channel(ctx: commands.Context, target: str):
+        async def config_logs_channel(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
 
@@ -260,7 +266,8 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='automod_logs_channel')
-        async def config_automod_logs_channel(ctx: commands.Context, target: str):
+        async def config_automod_logs_channel(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
 
@@ -279,7 +286,8 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='verified_role')
-        async def config_verified_role(ctx: commands.Context, target: str):
+        async def config_verified_role(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
@@ -298,7 +306,9 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid role!')
         
         @config.command(name='unverified_role')
-        async def config_unverified_role(ctx: commands.Context, target: str):
+        async def config_unverified_role(ctx: commands.Context, *_target):
+            print(_target)
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
@@ -405,7 +415,8 @@ class GeneralModule(Module):
             pass
 
         @mod_role.command(name='add')
-        async def mod_add(ctx: commands.Context, target: str):
+        async def mod_add(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
@@ -429,7 +440,8 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid role!')
         
         @mod_role.command(name='remove')
-        async def mod_remove(ctx: commands.Context, target: str):
+        async def mod_remove(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
@@ -457,7 +469,8 @@ class GeneralModule(Module):
             pass
 
         @admin_role.command(name='add')
-        async def admin_add(ctx: commands.Context, target: str):
+        async def admin_add(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
@@ -481,7 +494,8 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid role!')
         
         @admin_role.command(name='remove')
-        async def admin_remove(ctx: commands.Context, target: str):
+        async def admin_remove(ctx: commands.Context, *_target):
+            target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 

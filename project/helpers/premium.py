@@ -9,7 +9,10 @@ async def get_user_premium_status(user_id):
     cached = premium_cache.get(user_id)
     if cached is not None:
         return cached
-    roles = await bot_api.get_member_roles('aE9Zg6Kj', user_id)
+    try:
+        roles = await bot_api.get_member_roles('aE9Zg6Kj', user_id)
+    except Exception:
+        roles = None
     if roles is not None:
         roles = roles['roleIds']
     else:
