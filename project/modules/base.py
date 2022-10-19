@@ -46,24 +46,19 @@ class Module:
         if cached:
             return cached
         else:
-            self.bot_api.session = aiohttp.ClientSession()
-            cached = (await self.bot_api.request(http.Route('GET', f'/teams/{guild_id}/info', override_base=http.Route.USER_BASE))).get('team')
+            try:
+                self.bot_api.session = aiohttp.ClientSession()
+                cached = (await self.bot_api.request(http.Route('GET', f'/teams/{guild_id}/info', override_base=http.Route.USER_BASE))).get('team')
+                await self.bot_api.session.close()
+            except Exception:
+                cached = {}
             guild_info_cache.set(guild_id, cached)
-            await self.bot_api.session.close()
             return cached
 
     async def get_ctx_members(self, ctx: commands.Context):
         guild_id = ctx.server.id
-        cached = guild_info_cache.get(f'{guild_id}/members')
 
-        if cached:
-            return cached.get('members')
-        else:
-            self.bot_api.session = aiohttp.ClientSession()
-            cached = await self.bot_api.request(http.Route('GET', f'/teams/{guild_id}/members', override_base=http.Route.USER_BASE))
-            guild_info_cache.set(guild_id, cached)
-            await self.bot_api.session.close()
-            return cached.get('members')
+        return await ctx.server.fetch_members()
 
     async def get_ctx_roles(self, ctx: commands.Context):
         guild_id = ctx.server.id
@@ -91,8 +86,8 @@ class Module:
             member = member_id
         member_list = await self.get_ctx_members(ctx)
         for item in member_list:
-            if item['id'] == member or item['name'] == member:
-                return await ctx.server.getch_member(item['id'])
+            if item.id == member or item.name == member:
+                return item
     
     async def convert_channel(self, ctx: commands.Context, channel: str):
         match: re.Match = re.search(CHANNEL_REGEX, channel)
@@ -107,11 +102,13 @@ class Module:
                 return {
                     'id': item.id
                 } #await self.bot.getch_channel(item.id)
-        res = await self.bot.getch_channel(channel)
-        if res:
+        try:
+            res = await self.bot.getch_channel(channel)
             return {
                 'id': res.id
             }
+        except Exception:
+            return None
     
     async def convert_role(self, ctx: commands.Context, role: str):
         match: re.Match = re.search(MEMBER_REGEX, role)
@@ -128,6 +125,10 @@ class Module:
         for item in role_list:
             if item['id'] == role_int or item['name'] == role:
                 return item
+        if role_int:
+            return {
+                'id': role
+            }
     
     async def user_can_manage_server(self, member: Member):
         guild_id = member.guild.id

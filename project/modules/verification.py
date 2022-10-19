@@ -119,7 +119,7 @@ class VerificationModule(Module):
                 })
             if verification_channel:
                 channel: ChatChannel = await event.server.fetch_channel(verification_channel)
-                await channel.send(f'Welcome {event.member.name}! Please verify using the /verify command.')
+                await channel.send(f'Welcome {event.member.name}! Please verify using the /verify command. If you are unable to send messages here or after verifying, please try reloading your Guilded client!')
         
         bot.join_listeners.append(on_member_join)
 

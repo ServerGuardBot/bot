@@ -87,10 +87,12 @@ class GeneralModule(Module):
         /config mod_role <add/remove>
         /config admin_role <add/remove>
         /config mute_role <role>
-        /config filter <toxicity/hatespeech/spam> <sensitivity> - Set the sensitivity of a filter, setting to 0 disables
+        /config filter <toxicity/hatespeech> <sensitivity> - Set the sensitivity of a filter, setting to 0 disables
         /config filter <add/remove> <word> - Add or remove a word from the filter list
         /config spam <limit> - Set how many messages a user can say in a short timespan before the bot removes them, setting to 0 disables
         /config url_filter <yes/no> - Turn on or off the malicious URL filter
+        /config invite_link_filter <yes/no> - Turn on or off the discord/guilded invite link filter
+        /config duplicate_filter <yes/no> - Turn on or off the duplicate text filter
 
         NOTE: all role-related configurations expect a ROLE ID due to Guilded limitations.
         '''
@@ -109,6 +111,36 @@ class GeneralModule(Module):
 
             if result.status_code == 200 or result.status_code == 201:
                 await ctx.reply('Successfully changed automod spam limit.')
+            else:
+                await ctx.reply('An unknown error occurred while performing this action.')
+        
+        @config.command(name='invite_link_filter')
+        async def config_invite_link_filter(ctx: commands.Context, on: str):
+            await self.validate_permission_level(2, ctx)
+
+            result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/invite_link_filter', json={
+                'value': on == 'yes' and 1 or 0
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+
+            if result.status_code == 200 or result.status_code == 201:
+                await ctx.reply('Successfully changed invite filtering status.')
+            else:
+                await ctx.reply('An unknown error occurred while performing this action.')
+        
+        @config.command(name='duplicate_filter')
+        async def config_duplicate_filter(ctx: commands.Context, on: str):
+            await self.validate_permission_level(2, ctx)
+
+            result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/automod_duplicate', json={
+                'value': on == 'yes' and 1 or 0
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+
+            if result.status_code == 200 or result.status_code == 201:
+                await ctx.reply('Successfully changed duplicate text filtering status.')
             else:
                 await ctx.reply('An unknown error occurred while performing this action.')
         
@@ -391,22 +423,6 @@ class GeneralModule(Module):
 
             if result.status_code == 200 or result.status_code == 201:
                 await ctx.reply('Successfully set hate speech filter.')
-            else:
-                await ctx.reply('An unknown error occurred while performing this action.')
-        
-        @filter.command(name='spam')
-        async def filter_spam(ctx: commands.Context, sensitivity: int=0):
-            await self.validate_permission_level(2, ctx)
-            sensitivity = min(sensitivity, 100)
-
-            result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/spam', json={
-                'value': sensitivity
-            }, headers={
-                'authorization': bot_config.SECRET_KEY
-            })
-
-            if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully set spam filter.')
             else:
                 await ctx.reply('An unknown error occurred while performing this action.')
         

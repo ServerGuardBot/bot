@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from project.helpers.embeds import *
 from project.helpers.images import *
 from project.helpers.Cache import Cache
@@ -17,6 +18,8 @@ import numpy as np
 
 user_converter = commands.UserConverter()
 
+SERVER_INVITE_REGEX = r'h?t?t?p?s?:?\/?\/?w?w?w?\.?(discord\.gg|discordapp\.com\/invite|guilded\.gg|guilded\.com|guilded\.gg\/i|guilded\.com\/i)\/(.+[\w-])'
+
 MODELS_ROOT = bot_config.PROJECT_ROOT + '/project/ml_models'
 
 filters = {
@@ -27,10 +30,6 @@ filters = {
     'hatespeech': {
         'vectorizer': joblib.load(MODELS_ROOT + '/hatespeech/vectorizer.joblib'),
         'model': joblib.load(MODELS_ROOT + '/hatespeech/model.joblib')
-    },
-    'spam': {
-        'vectorizer': joblib.load(MODELS_ROOT + '/spam/vectorizer.joblib'),
-        'model': joblib.load(MODELS_ROOT + '/spam/model.joblib')
     }
 }
 
@@ -50,6 +49,29 @@ def apply_filter(filter: str, texts: list):
 
 def reset_filter_cache(guild_id):
     filter_cache.remove(guild_id)
+
+def repeats(s):
+    s = s.lower()
+
+    words = s.split()
+    uniqueWords = set(words)
+
+    if len(uniqueWords) < round(len(words) * .85):
+        return True
+
+    for word in words:
+        charCount = dict()
+        unique = set(tuple(word))
+        for char in word:
+            if char in charCount:
+                charCount[char] += 1
+            else:
+                charCount[char] = 1
+        for key in charCount:
+            if charCount[key] > len(unique):
+                return True
+
+    return False
 
 class ModerationModule(Module):
     name = 'Moderation'
@@ -77,7 +99,7 @@ class ModerationModule(Module):
             user = self.convert_member(ctx, target)
 
             if await self.is_moderator(user):
-                ctx.reply('This user is a moderator, I can\'t do that!')
+                await ctx.reply('This user is a moderator, I can\'t do that!')
                 return
             
             guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
@@ -136,7 +158,7 @@ class ModerationModule(Module):
             bot_api.session = aiohttp.ClientSession()
 
             if await self.is_moderator(user):
-                ctx.reply('This user is a moderator, I can\'t do that!')
+                await ctx.reply('This user is a moderator, I can\'t do that!')
                 return
 
             guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
@@ -418,6 +440,12 @@ class ModerationModule(Module):
             else:
                 logs_channel = None
             
+            if config.get('automod_duplicate', 0) == 1:
+                if repeats(message.content):
+                    await message.reply(embed=EMBED_FILTERED(message.author, 'Duplicate text'), private=True)
+                    await message.delete()
+                    return
+            
             if config.get('automod_spam', 0) > 0:
                 cached_spam = spam_cache.get(f'{message.guild.id}/{message.author_id}')
                 if cached_spam is None:
@@ -449,6 +477,20 @@ class ModerationModule(Module):
                             .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
                         return
 
+            if config.get('invite_link_filter', 0) == 1:
+                for domain, invite in re.findall(SERVER_INVITE_REGEX, message.content):
+                    await message.reply(embed=EMBED_FILTERED(message.author, 'Invite Link Detected'), private=True)
+                    await message.delete()
+                    if logs_channel is not None:
+                        await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
+                            title='Invite Link Detected',
+                            description=message.content,
+                            url=message.share_url,
+                            colour = Colour.red(),
+                        ).add_field(name='Invite Link', value=domain + '/' + invite, inline=False)\
+                        .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
+                    return
+            
             if config.get('toxicity', 0) > 0:
                 toxicity_proba = apply_filter('toxicity', [message.content])[0] * 100
             else:
@@ -457,29 +499,27 @@ class ModerationModule(Module):
                 hatespeech_proba = apply_filter('hatespeech', [message.content])[0] * 100
             else:
                 hatespeech_proba = 0
-            if config.get('spam', 0) > 0:
-                spam_proba = apply_filter('spam', [message.content])[0] * 100
-            else:
-                spam_proba = 0
             
-            if toxicity_proba >= config['toxicity']:
+            hit_filter = False
+            if config.get('toxicity', 0) > 0 and toxicity_proba >= config.get('toxicity', 0):
                 await message.reply(embed=EMBED_FILTERED(message.author, 'Toxicity'),private=True)
                 await message.delete()
-            if hatespeech_proba >= config['hatespeech']:
+                hit_filter = True
+            if config.get('hatespeech', 0) > 0 and hatespeech_proba >= config.get('hatespeech', 0):
                 await message.reply(embed=EMBED_FILTERED(message.author, 'Hate Speech'),private=True)
                 await message.delete()
-            if spam_proba >= config['spam']:
-                await message.reply(embed=EMBED_FILTERED(message.author, 'Spam'),private=True)
-                await message.delete()
-            if max(toxicity_proba, spam_proba, hatespeech_proba) >= 50:
+                hit_filter = True
+            if max(toxicity_proba, hatespeech_proba) >= 50:
                 if logs_channel is not None:
-                    which = toxicity_proba >= 50 and 'Toxicity' or spam_proba >= 50 and 'Spam' or 'Hate Speech'
+                    which = toxicity_proba >= 50 and 'Toxicity' or 'Hate Speech'
                     await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
                         title=f'{which} Filter Triggered',
                         description=message.content,
                         url=message.share_url,
                         colour = Colour.orange(),
-                    ).set_footer(text=f'Certainty: {round(max(toxicity_proba, spam_proba, hatespeech_proba))}%').add_field(name='User', value=message.author.name))
+                    ).set_footer(text=f'Certainty: {round(max(toxicity_proba, hatespeech_proba))}%').add_field(name='User', value=message.author.name))
+            if hit_filter:
+                return
             if custom_filter is not None and len(custom_filter) > 0:
                 filter = self.get_filter(message.server_id)
                 if filter.contains_profanity(message.content):
