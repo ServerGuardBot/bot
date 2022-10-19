@@ -431,6 +431,9 @@ class ModerationModule(Module):
         async def on_message(message: ChatMessage):
             if message.author.bot:
                 return
+            member = await message.guild.getch_member(message.author.id)
+            if (await self.is_moderator(member)) or await self.user_can_manage_server(member):
+                return
             guild_data: dict = self.get_guild_data(message.server_id)
             config = guild_data.get('config', {})
             custom_filter = config.get('filters')
