@@ -4,6 +4,8 @@ from project.helpers.embeds import *
 from project import bot_config
 from guilded.ext import commands
 from guilded import Embed, BulkMemberRolesUpdateEvent, http
+from datetime import datetime
+from humanfriendly import format_timespan
 
 import os
 import requests
@@ -20,6 +22,8 @@ class GeneralModule(Module):
 
         self.bot_api = http.HTTPClient()
         self.bot_api.token = os.getenv('BOT_KEY')
+
+        start_time = datetime.now().timestamp()
 
         # Register help command
         @bot.command(name='commands')
@@ -47,6 +51,18 @@ class GeneralModule(Module):
         NOTE: Timespans are precise to the *exact day* not hours or minutes due to technical limitations.
         '''
             ))
+
+        @bot.command()
+        async def analytics(ctx: commands.Context):
+            if ctx.author.id == 'm6YxwpQd':
+                uptime = abs(datetime.now().timestamp() - start_time)
+                await ctx.reply(embed=Embed(
+                    title='Bot Analytics',
+                    colour=Colour.gilded(),
+                )\
+                .add_field(name='Server Count', value=str(len(bot.servers)))\
+                .add_field(name='Uptime', value=format_timespan(uptime))\
+                .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80'))
 
         @bot.command()
         async def support(ctx: commands.Context):
@@ -203,7 +219,7 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             premium_status = await self.get_user_premium_status(ctx.server.owner_id)
-            if premium_status is 0:
+            if premium_status == 0:
                 await ctx.reply(embed=EMBED_NEEDS_PREMIUM(1))
                 return
             ref = await self.convert_channel(ctx, target)

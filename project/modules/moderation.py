@@ -6,7 +6,7 @@ from project.helpers.Cache import Cache
 from project.modules.base import Module
 from project import bot_config, bot_api, malicious_urls
 from guilded.ext import commands
-from guilded import Embed, Colour, MemberJoinEvent, MemberRemoveEvent, MessageUpdateEvent, MessageDeleteEvent, ChatMessage, http
+from guilded import Embed, Colour, MemberJoinEvent, MemberRemoveEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
 from humanfriendly import parse_timespan, format_timespan
 from better_profanity import Profanity
 
@@ -18,7 +18,7 @@ import numpy as np
 
 user_converter = commands.UserConverter()
 
-SERVER_INVITE_REGEX = r'h?t?t?p?s?:?\/?\/?w?w?w?\.?(discord\.gg|discordapp\.com\/invite|guilded\.gg|guilded\.com|guilded\.gg\/i|guilded\.com\/i)\/(.+[\w-])'
+SERVER_INVITE_REGEX = r'h?t?t?p?s?:?\/?\/?w?w?w?\.?(discord\.gg|discordapp\.com\/invite|guilded\.gg|guilded\.com|guilded\.gg\/i|guilded\.com\/i)\/([\w-]+)'
 
 MODELS_ROOT = bot_config.PROJECT_ROOT + '/project/ml_models'
 
@@ -382,7 +382,106 @@ class ModerationModule(Module):
         
         bot.leave_listeners.append(on_member_remove)
 
+        async def handle_text_message(message):
+            guild_data: dict = self.get_guild_data(message.server_id)
+            config = guild_data.get('config', {})
+            custom_filter = config.get('filters')
+            logs_channel_id = config.get('automod_logs_channel')
+            if logs_channel_id:
+                logs_channel = await bot.getch_channel(logs_channel_id)
+            else:
+                logs_channel = None
+            if config.get('automod_duplicate', 0) == 1 and len(message.content) > 5:
+                if repeats(message.content):
+                    if isinstance(message, ChatMessage):
+                        await message.reply(embed=EMBED_FILTERED(message.author, 'Duplicate text'), private=True)
+                    await message.delete()
+                    return True
+
+            if config.get('url_filter', 0) == 1:
+                for url in malicious_urls.keys():
+                    if url in message.content:
+                        if isinstance(message, ChatMessage):
+                            await message.reply(embed=EMBED_FILTERED(message.author, 'Malicious URL Detected'), private=True)
+                        await message.delete()
+                        if logs_channel is not None:
+                            await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
+                                title='Malicious URL Detected',
+                                description=message.content,
+                                url=message.share_url,
+                                colour = Colour.red(),
+                            ).add_field(name='Threat Category', value=malicious_urls.get(url, 'unknown'), inline=False)\
+                            .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
+                        return True
+
+            if config.get('invite_link_filter', 0) == 1:
+                for domain, invite in re.findall(SERVER_INVITE_REGEX, message.content):
+                    if isinstance(message, ChatMessage):
+                        await message.reply(embed=EMBED_FILTERED(message.author, 'Invite Link Detected'), private=True)
+                    await message.delete()
+                    if logs_channel is not None:
+                        await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
+                            title='Invite Link Detected',
+                            description=message.content,
+                            url=message.share_url,
+                            colour = Colour.red(),
+                        ).add_field(name='Invite Link', value=domain + '/' + invite, inline=False)\
+                        .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
+                    return True
+            
+            if config.get('toxicity', 0) > 0:
+                toxicity_proba = apply_filter('toxicity', [message.content])[0] * 100
+            else:
+                toxicity_proba = 0
+            if config.get('hatespeech', 0) > 0:
+                hatespeech_proba = apply_filter('hatespeech', [message.content])[0] * 100
+            else:
+                hatespeech_proba = 0
+            
+            hit_filter = False
+            if config.get('toxicity', 0) > 0 and toxicity_proba >= config.get('toxicity', 0):
+                if isinstance(message, ChatMessage):
+                    await message.reply(embed=EMBED_FILTERED(message.author, 'Toxicity'),private=True)
+                await message.delete()
+                hit_filter = True
+            if config.get('hatespeech', 0) > 0 and hatespeech_proba >= config.get('hatespeech', 0):
+                if isinstance(message, ChatMessage):
+                    await message.reply(embed=EMBED_FILTERED(message.author, 'Hate Speech'),private=True)
+                await message.delete()
+                hit_filter = True
+            if max(toxicity_proba, hatespeech_proba) >= 50:
+                if logs_channel is not None:
+                    which = toxicity_proba >= 50 and 'Toxicity' or 'Hate Speech'
+                    await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
+                        title=f'{which} Filter Triggered',
+                        description=message.content,
+                        url=message.share_url,
+                        colour = Colour.orange(),
+                    ).set_footer(text=f'Certainty: {round(max(toxicity_proba, hatespeech_proba))}%').add_field(name='User', value=message.author.name))
+            if hit_filter:
+                return True
+            if custom_filter is not None and len(custom_filter) > 0:
+                filter = self.get_filter(message.server_id)
+                if filter.contains_profanity(message.content):
+                    if isinstance(message, ChatMessage):
+                        await message.reply(embed=EMBED_FILTERED(message.author, 'Blacklisted Word'),private=True)
+                    await message.delete()
+                    if logs_channel is not None:
+                        await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
+                            title='Blacklisted Word Filter Triggered',
+                            description=message.content,
+                            url=message.share_url,
+                            colour = Colour.orange(),
+                        ).add_field(name='User', value=message.author.name).add_field(name='Filtered Message', value=filter.censor(message.content), inline=False))
+            return False
+
         async def on_message_update(event: MessageUpdateEvent):
+            if not event.after.author.bot:
+                member = await event.server.getch_member(event.after.author.id)
+                if (await self.is_moderator(member)) == False and (await self.user_can_manage_server(member)) == False:
+                    if await handle_text_message(event.after):
+                        return
+
             guild_data: dict = self.get_guild_data(event.server_id)
             message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
 
@@ -406,6 +505,8 @@ class ModerationModule(Module):
         bot.message_update_listeners.append(on_message_update)
 
         async def on_message_delete(event: MessageDeleteEvent):
+            if event.message.author.bot:
+                return
             guild_data: dict = self.get_guild_data(event.server_id)
             message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
 
@@ -434,20 +535,10 @@ class ModerationModule(Module):
             member = await message.guild.getch_member(message.author.id)
             if (await self.is_moderator(member)) or await self.user_can_manage_server(member):
                 return
+            if await handle_text_message(message):
+                return
             guild_data: dict = self.get_guild_data(message.server_id)
             config = guild_data.get('config', {})
-            custom_filter = config.get('filters')
-            logs_channel_id = config.get('automod_logs_channel')
-            if logs_channel_id:
-                logs_channel = await bot.getch_channel(logs_channel_id)
-            else:
-                logs_channel = None
-            
-            if config.get('automod_duplicate', 0) == 1 and len(message.content) > 5:
-                if repeats(message.content):
-                    await message.reply(embed=EMBED_FILTERED(message.author, 'Duplicate text'), private=True)
-                    await message.delete()
-                    return
             
             if config.get('automod_spam', 0) > 0:
                 cached_spam = spam_cache.get(f'{message.guild.id}/{message.author_id}')
@@ -464,75 +555,66 @@ class ModerationModule(Module):
                 else:
                     cached_spam.append(message)
                     spam_cache.set(f'{message.guild.id}/{message.author_id}', cached_spam)
-            
-            if config.get('url_filter', 0) == 1:
-                for url in malicious_urls.keys():
-                    if url in message.content:
-                        await message.reply(embed=EMBED_FILTERED(message.author, 'Malicious URL Detected'), private=True)
-                        await message.delete()
-                        if logs_channel is not None:
-                            await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
-                                title='Malicious URL Detected',
-                                description=message.content,
-                                url=message.share_url,
-                                colour = Colour.red(),
-                            ).add_field(name='Threat Category', value=malicious_urls.get(url, 'unknown'), inline=False)\
-                            .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
-                        return
-
-            if config.get('invite_link_filter', 0) == 1:
-                for domain, invite in re.findall(SERVER_INVITE_REGEX, message.content):
-                    await message.reply(embed=EMBED_FILTERED(message.author, 'Invite Link Detected'), private=True)
-                    await message.delete()
-                    if logs_channel is not None:
-                        await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
-                            title='Invite Link Detected',
-                            description=message.content,
-                            url=message.share_url,
-                            colour = Colour.red(),
-                        ).add_field(name='Invite Link', value=domain + '/' + invite, inline=False)\
-                        .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
-                    return
-            
-            if config.get('toxicity', 0) > 0:
-                toxicity_proba = apply_filter('toxicity', [message.content])[0] * 100
-            else:
-                toxicity_proba = 0
-            if config.get('hatespeech', 0) > 0:
-                hatespeech_proba = apply_filter('hatespeech', [message.content])[0] * 100
-            else:
-                hatespeech_proba = 0
-            
-            hit_filter = False
-            if config.get('toxicity', 0) > 0 and toxicity_proba >= config.get('toxicity', 0):
-                await message.reply(embed=EMBED_FILTERED(message.author, 'Toxicity'),private=True)
-                await message.delete()
-                hit_filter = True
-            if config.get('hatespeech', 0) > 0 and hatespeech_proba >= config.get('hatespeech', 0):
-                await message.reply(embed=EMBED_FILTERED(message.author, 'Hate Speech'),private=True)
-                await message.delete()
-                hit_filter = True
-            if max(toxicity_proba, hatespeech_proba) >= 50:
-                if logs_channel is not None:
-                    which = toxicity_proba >= 50 and 'Toxicity' or 'Hate Speech'
-                    await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
-                        title=f'{which} Filter Triggered',
-                        description=message.content,
-                        url=message.share_url,
-                        colour = Colour.orange(),
-                    ).set_footer(text=f'Certainty: {round(max(toxicity_proba, hatespeech_proba))}%').add_field(name='User', value=message.author.name))
-            if hit_filter:
-                return
-            if custom_filter is not None and len(custom_filter) > 0:
-                filter = self.get_filter(message.server_id)
-                if filter.contains_profanity(message.content):
-                    await message.reply(embed=EMBED_FILTERED(message.author, 'Blacklisted Word'),private=True)
-                    await message.delete()
-                    if logs_channel is not None:
-                        await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
-                            title='Blacklisted Word Filter Triggered',
-                            description=message.content,
-                            url=message.share_url,
-                            colour = Colour.orange(),
-                        ).add_field(name='User', value=message.author.name).add_field(name='Filtered Message', value=filter.censor(message.content), inline=False))
         self.bot.message_listeners.append(on_message)
+
+        async def on_forum_topic_create(event: ForumTopicCreateEvent):
+            if event.topic.author.bot:
+                return
+            member = await event.server.getch_member(event.topic.author.id)
+            if (await self.is_moderator(member)) or await self.user_can_manage_server(member):
+                return
+            if await handle_text_message(event.topic):
+                return
+        self.bot.topic_create_listeners.append(on_forum_topic_create)
+
+        async def on_forum_topic_update(event: ForumTopicUpdateEvent):
+            if event.topic.author.bot:
+                return
+            member = await event.server.getch_member(event.topic.author.id)
+            if (await self.is_moderator(member)) or await self.user_can_manage_server(member):
+                return
+            if await handle_text_message(event.topic):
+                return
+            guild_data: dict = self.get_guild_data(event.server_id)
+            message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
+
+            if message_log_channel is not None and message_log_channel != '':
+                channel = await bot.getch_channel(message_log_channel)
+                member = event.after.author
+                em = Embed(
+                    title=f'Message edited in {event.after.channel.name}',
+                    url=event.after.share_url,
+                    colour=Colour.gilded(),
+                    timestamp=datetime.now()
+                )
+                em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                em.add_field(name='ID', value=member.id)
+                em.add_field(name='Edited topic title', value=event.topic.title, inline=False)
+                em.add_field(name='Edited topic contents', value=event.topic.content, inline=False)
+                em.set_thumbnail(url=member.avatar.aws_url)
+                await channel.send(embed=em)
+        self.bot.topic_update_listeners.append(on_forum_topic_update)
+
+        async def on_forum_topic_delete(event: ForumTopicDeleteEvent):
+            if event.topic.author.bot:
+                return
+            guild_data: dict = self.get_guild_data(event.server_id)
+            message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
+
+            if message_log_channel is not None and message_log_channel != '':
+                if event.topic is not None:
+                    channel = await bot.getch_channel(message_log_channel)
+                    member = event.topic.author
+                    em = Embed(
+                        title=f'Forum topic deleted in {event.topic.channel.name}',
+                        url=event.topic.share_url,
+                        colour=Colour.red(),
+                        timestamp=datetime.now()
+                    )
+                    em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                    em.add_field(name='ID', value=member.id)
+                    em.add_field(name='Deleted topic title', value=event.topic.title, inline=False)
+                    em.add_field(name='Deleted topic contents', value=event.topic.content, inline=False)
+                    em.set_thumbnail(url=member.avatar.aws_url)
+                    await channel.send(embed=em)
+        self.bot.topic_delete_listeners.append(on_forum_topic_delete)

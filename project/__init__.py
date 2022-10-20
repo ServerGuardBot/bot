@@ -1,6 +1,6 @@
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MemberJoinEvent, MemberRemoveEvent, http
+from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MemberJoinEvent, MemberRemoveEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
 from guilded.ext import commands
 from nsfw_detector import predict as nsfw_detect
 from zipfile import ZipFile
@@ -92,6 +92,9 @@ class BotClient(commands.Bot):
     leave_listeners: list = []
     message_update_listeners: list = []
     message_delete_listeners: list = []
+    topic_create_listeners: list = []
+    topic_update_listeners: list = []
+    topic_delete_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
 
@@ -172,6 +175,30 @@ async def on_message_delete(event: MessageDeleteEvent):
             await callback(event)
         except Exception as e:
             print('Failed to run message delete listener:', e)
+
+@client.event
+async def on_forum_topic_create(event: ForumTopicCreateEvent):
+    for callback in client.topic_create_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic delete listener:', e)
+
+@client.event
+async def on_forum_topic_update(event: ForumTopicUpdateEvent):
+    for callback in client.topic_update_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic delete listener:', e)
+
+@client.event
+async def on_forum_topic_delete(event: ForumTopicDeleteEvent):
+    for callback in client.topic_delete_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic delete listener:', e)
 
 print('Registering Modules')
 modules = [str(m) for m in sys.modules if m.startswith('modules.')]
