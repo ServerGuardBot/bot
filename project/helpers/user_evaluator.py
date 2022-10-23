@@ -123,7 +123,7 @@ def eval_steam(id: int):
     if result.status_code == 200:
         contents = result.json()
 
-        return min((max(10 - contents['response']['player_level'], 0) / 10) * 100, 100)
+        return min((max(10 - contents['response'].get('player_level', 0), 0) / 10) * 100, 100)
     else:
         return None
 

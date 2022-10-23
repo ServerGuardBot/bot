@@ -18,7 +18,7 @@ import numpy as np
 
 user_converter = commands.UserConverter()
 
-SERVER_INVITE_REGEX = r'h?t?t?p?s?:?\/?\/?w?w?w?\.?(discord\.gg|discordapp\.com\/invite|guilded\.gg|guilded\.com|guilded\.gg\/i|guilded\.com\/i)\/([\w-]+)'
+SERVER_INVITE_REGEX = r'h?t?t?p?s?:?\/?\/?w?w?w?\.?(discord\.gg|discordapp\.com\/invite|guilded\.gg|guilded\.com|guilded\.gg\/i|guilded\.com\/i)\/([\w/-]+)'
 
 MODELS_ROOT = bot_config.PROJECT_ROOT + '/project/ml_models'
 
@@ -56,7 +56,7 @@ def repeats(s):
     words = s.split()
     uniqueWords = set(words)
 
-    if len(uniqueWords) < round(len(words) * .85):
+    if len(uniqueWords) < round(len(words) * .35):
         return True
 
     for word in words:
@@ -68,10 +68,13 @@ def repeats(s):
             else:
                 charCount[char] = 1
         for key in charCount:
-            if charCount[key] > len(unique):
+            if charCount[key] > len(unique) and len(unique) > 4:
                 return True
 
     return False
+
+class Moderation(commands.Cog):
+    pass
 
 class ModerationModule(Module):
     name = 'Moderation'
@@ -93,8 +96,11 @@ class ModerationModule(Module):
         self.bot_api = http.HTTPClient()
         self.bot_api.token = os.getenv('BOT_KEY')
 
+        cog = Moderation()
+
         @bot.command()
-        async def ban(ctx: commands.Context, target: str, timespan: str=None, *_reason):
+        async def ban(self, ctx: commands.Context, target: str, timespan: str=None, *_reason):
+            """[Moderator+] Ban a user"""
             await self.validate_permission_level(1, ctx)
             user = self.convert_member(ctx, target)
 
@@ -140,8 +146,11 @@ class ModerationModule(Module):
                     channel = await ctx.server.fetch_channel(guild_data['config']['logs_channel'])
                     await channel.send(embed=em)
         
+        ban.cog = cog
+        
         @bot.command()
-        async def unban(ctx: commands.Context, target: str):
+        async def unban(self, ctx: commands.Context, target: str):
+            """[Moderator+] Unban a user"""
             await self.validate_permission_level(1, ctx)
             user = await user_converter.convert(ctx, target)
 
@@ -149,9 +158,12 @@ class ModerationModule(Module):
             requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/ban', headers={
                 'authorization': bot_config.SECRET_KEY
             })
+
+        unban.cog = cog
         
         @bot.command()
-        async def mute(ctx: commands.Context, target: str, timespan: str=None, *_reason):
+        async def mute(self, ctx: commands.Context, target: str, timespan: str=None, *_reason):
+            """[Moderator+] Mute a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
@@ -200,8 +212,11 @@ class ModerationModule(Module):
                     await channel.send(embed=em)
                 await bot_api.session.close()
         
+        mute.cog = cog
+        
         @bot.command()
-        async def unmute(ctx: commands.Context, target: str):
+        async def unmute(self, ctx: commands.Context, target: str):
+            """[Moderator+] Unmute a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
@@ -219,8 +234,11 @@ class ModerationModule(Module):
             })
             await bot_api.session.close()
         
+        unmute.cog = cog
+        
         @bot.command()
-        async def warn(ctx: commands.Context, target: str, timespan: str=None, *_reason):
+        async def warn(self, ctx: commands.Context, target: str, timespan: str=None, *_reason):
+            """[Moderator+] Warn a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
@@ -260,8 +278,11 @@ class ModerationModule(Module):
                     channel = await ctx.server.fetch_channel(guild_data['config']['logs_channel'])
                     await channel.send(embed=em)
         
+        warn.cog = cog
+        
         @bot.command()
-        async def warnings(ctx: commands.Context, target: str):
+        async def warnings(self, ctx: commands.Context, target: str):
+            """[Moderator+] Get a user's warnings"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
@@ -275,8 +296,11 @@ class ModerationModule(Module):
             )
             await ctx.reply(embed=em)
         
+        warnings.cog = cog
+        
         @bot.command()
-        async def delwarn(ctx: commands.Context, target: str, id: str=None):
+        async def delwarn(self, ctx: commands.Context, target: str, id: str=None):
+            """[Moderator+] Delete a user's warning(s)"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
@@ -301,8 +325,11 @@ class ModerationModule(Module):
                 )
                 await ctx.reply(embed=em)
         
+        delwarn.cog = cog
+        
         @bot.command()
-        async def userinfo(ctx: commands.Context, target: str):
+        async def userinfo(self, ctx: commands.Context, target: str):
+            """[Moderator+] Get information on a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
@@ -321,6 +348,8 @@ class ModerationModule(Module):
                 em.add_field(name='Account created', value=user.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
                 em.add_field(name='Joined at', value=user.joined_at.strftime("%b %d %Y at %H:%M %p %Z"))
                 await ctx.reply(embed=em)
+        
+        userinfo.cog = cog
         
         async def on_member_join(event: MemberJoinEvent):
             member = event.member
@@ -416,6 +445,8 @@ class ModerationModule(Module):
 
             if config.get('invite_link_filter', 0) == 1:
                 for domain, invite in re.findall(SERVER_INVITE_REGEX, message.content):
+                    if '/' in invite:
+                        continue
                     if isinstance(message, ChatMessage):
                         await message.reply(embed=EMBED_FILTERED(message.author, 'Invite Link Detected'), private=True)
                     await message.delete()

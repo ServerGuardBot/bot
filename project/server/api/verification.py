@@ -5,6 +5,7 @@ import jwt
 import aiohttp
 import requests
 
+from datetime import datetime
 from json import JSONEncoder
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
@@ -27,6 +28,19 @@ verification_blueprint = Blueprint('verification', __name__)
 verify_cache = Cache(60 * 10, shared_dict)
 ip_cache = Cache(300, shared_ip_cache)
 
+tor_exit_nodes = []
+last_tor_node_get = None
+
+def get_tor_exit_nodes():
+    if last_tor_node_get is None or abs(last_tor_node_get - datetime.now().timestamp()) > 60 * 30:
+        last_tor_node_get = datetime.now().timestamp()
+        req = requests.get('https://www.dan.me.uk/torlist/?exit')
+        list = req.content
+        tor_exit_nodes.clear()
+        for line in list.splitlines():
+            tor_exit_nodes.append(str(line))
+    return tor_exit_nodes
+
 async def send_embed(channel_id, embed: Embed):
     return await bot_api.create_channel_message(channel_id, payload={
         'embeds': [embed.to_dict()]
@@ -46,6 +60,7 @@ class VerifyUser(MethodView):
 
             guild = (await bot_api.get_server(token.guild_id)).get('server')
             user = (await bot_api.get_member(token.guild_id, token.user_id)).get('member')
+            db_guild: Guild = Guild.query.filter_by(guild_id = token.guild_id).first()
 
             await bot_api.session.close()
             return jsonify({
@@ -55,6 +70,7 @@ class VerifyUser(MethodView):
                 'user_id': token.user_id,
                 'user_name': user.get('user').get('name'),
                 'user_avatar': user.get('user').get('avatar') or IMAGE_DEFAULT_AVATAR,
+                'admin_contact': db_guild.config.get('admin_contact')
             }), 200
         except jwt.ExpiredSignatureError:
             await bot_api.session.close()
@@ -88,6 +104,7 @@ class VerifyUser(MethodView):
 
             premium_status = await get_user_premium_status(db_guild.get('ownerId'))
 
+            block_tor = guild.config.get('block_tor')
             logs_channel = guild.config.get('logs_channel')
 
             verified_role = guild.config.get('verified_role')
@@ -149,7 +166,7 @@ class VerifyUser(MethodView):
                         False
                     ))
                 return jsonify({
-                    'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
+                    'message': 'Please use a browser to verify with us!'
                 }), 403
 
             ip = request.environ.get("HTTP_X_REAL_IP", request.remote_addr)
@@ -157,6 +174,13 @@ class VerifyUser(MethodView):
             if cached_ip is None:
                 cached_ip = 1
             ip_cache.set(f'{token.guild_id}/{ip}', cached_ip + 1)
+
+            if block_tor is 1:
+                exit_nodes = get_tor_exit_nodes()
+                if ip in exit_nodes:
+                    return jsonify({
+                        'message': 'This server blocks verification from tor exit nodes'
+                    }), 403
 
             if cached_ip >= 3:
                 # Reject due to too many verification requests
@@ -166,7 +190,7 @@ class VerifyUser(MethodView):
                         False
                     ))
                 return jsonify({
-                    'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
+                    'message': 'You are verifying too often in this server.'
                 }), 403
 
             if premium_status > 0:
@@ -187,7 +211,7 @@ class VerifyUser(MethodView):
                                 False
                             ))
                         return jsonify({
-                            'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
+                            'message': 'Dangerous IP address identified by Advanced Proxy Check'
                         }), 403
 
             # Compare IP hash against database of banned users in this guild that aren't the user being verified
@@ -206,7 +230,7 @@ class VerifyUser(MethodView):
                     ))
                 await bot_api.session.close()
                 return jsonify({
-                    'message': 'You are forbidden from entering this server'
+                    'message': 'Your IP is linked to a previously banned member of this server'
                 }), 403
 
             # Compare browser id against database of banned users in this guild that aren't the user being verified
@@ -226,7 +250,7 @@ class VerifyUser(MethodView):
                             False
                         ))
                     return jsonify({
-                        'message': 'You are forbidden from entering this server' # No need to reveal how they were identified
+                        'message': 'Your IP is linked to a previously banned member of this server'
                     }), 403
 
             # Bot-related process

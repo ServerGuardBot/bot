@@ -13,14 +13,20 @@ member = commands.MemberConverter()
 channel = commands.ChatChannelConverter()
 role = commands.RoleConverter()
 
+class Verification(commands.Cog):
+    pass
+
 class VerificationModule(Module):
     name = "Verification"
 
     def initialize(self):
         bot = self.bot
 
+        cog = Verification()
+
         @bot.command()
-        async def evaluate(ctx: commands.Context, target: str=None):
+        async def evaluate(self, ctx: commands.Context, target: str=None):
+            """[Moderator+] Evaluate a user"""
             await self.validate_permission_level(1, ctx)
             user = target == None and ctx.author or await self.convert_member(ctx, target)
             if user.bot:
@@ -30,8 +36,11 @@ class VerificationModule(Module):
 
             await ctx.reply(embed=user_evaluator.generate_embed(eval_result))
         
+        evaluate.cog = cog
+        
         @bot.command()
-        async def verify(ctx: commands.Context):
+        async def verify(self, ctx: commands.Context):
+            """Verify with the bot"""
             guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
                 'authorization': bot_config.SECRET_KEY
             })
@@ -59,8 +68,11 @@ class VerificationModule(Module):
 
             await ctx.reply(content=f'Here\'s your verification link: [{link}](https://serverguard.reapimus.com/verify/{link})', private=True)
         
+        verify.cog = cog
+        
         @bot.command()
-        async def bypass(ctx: commands.Context, target: str):
+        async def bypass(self, ctx: commands.Context, target: str):
+            """[Moderator+] Grant a user a verification bypass"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
             if user.bot:
@@ -76,8 +88,11 @@ class VerificationModule(Module):
             else:
                 await ctx.reply('An unknown error occurred while performing this action.')
         
+        bypass.cog = cog
+        
         @bot.command()
-        async def unbypass(ctx: commands.Context, target: str):
+        async def unbypass(self, ctx: commands.Context, target: str):
+            """[Moderator+] Revoke a user's verification bypass"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
             if user.bot:
@@ -92,15 +107,8 @@ class VerificationModule(Module):
                 await ctx.reply('Successfully disallowed verification bypass.')
             else:
                 await ctx.reply('An unknown error occurred while performing this action.')
-
-        @bot.event
-        async def on_server_join(server: Server):
-            requests.get(f'http://localhost:5000/guilddata/{server.id}', headers={
-                'authorization': bot_config.SECRET_KEY
-            }) # Initialize server data
-
-            owner = await bot.fetch_user(server.owner_id)
-            await owner.send('Hey! Thanks for using Server Guard. To properly setup your server make sure to setup config using `/config`!')
+        
+        unbypass.cog = cog
 
         async def on_member_join(event: MemberJoinEvent):
             if event.member.bot:
@@ -112,14 +120,16 @@ class VerificationModule(Module):
             unverified_role = guild_data.get('config').get('unverified_role')
             verification_channel = guild_data.get('config').get('verification_channel')
             
-            if unverified_role:
-                requests.put(f'https://www.guilded.gg/api/v1/servers/{event.server_id}/members/{event.member.id}/roles/{unverified_role}',
-                headers={
-                    'Authorization': f'Bearer {bot_config.GUILDED_BOT_TOKEN}'
-                })
-            if verification_channel:
-                channel: ChatChannel = await event.server.fetch_channel(verification_channel)
-                await channel.send(f'Welcome {event.member.name}! Please verify using the /verify command. If you are unable to send messages here or after verifying, please try reloading your Guilded client!')
+            if verification_channel and verification_channel.isspace() is False and verification_channel != '':
+                # Only trigger these if verification is enabled, indicated by whether or not verification_channel is specified
+                if unverified_role:
+                    requests.put(f'https://www.guilded.gg/api/v1/servers/{event.server_id}/members/{event.member.id}/roles/{unverified_role}',
+                    headers={
+                        'Authorization': f'Bearer {bot_config.GUILDED_BOT_TOKEN}'
+                    })
+                if verification_channel:
+                    channel: ChatChannel = await event.server.fetch_channel(verification_channel)
+                    await channel.send(f'Welcome {event.member.name}! Please verify using the /verify command. If you are unable to send messages here or after verifying, please try reloading your Guilded client!')
         
         bot.join_listeners.append(on_member_join)
 
