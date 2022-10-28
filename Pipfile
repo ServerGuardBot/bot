@@ -5,7 +5,7 @@ name = "pypi"
 
 [packages]
 python-dotenv = "*"
-"guilded.py" = "*"
+"guilded.py" = {git = "https://github.com/shayypy/guilded.py.git"}
 gunicorn = "*"
 flask = {extras = ["async"], version = "*"}
 flask-sqlalchemy = "*"

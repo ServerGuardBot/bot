@@ -1,11 +1,12 @@
+import asyncio
 import re
 from project.modules.base import Module
 from project.modules.moderation import reset_filter_cache
 from project.helpers.embeds import *
 from project import bot_config
 from guilded.ext import commands
-from guilded.ext.commands.help import HelpCommand, Paginator, MinimalHelpCommand
-from guilded import Embed, BulkMemberRolesUpdateEvent, http
+from guilded.ext.commands.help import HelpCommand, Paginator
+from guilded import Embed, BulkMemberRolesUpdateEvent, BotAddEvent, http
 from datetime import datetime
 from humanfriendly import format_timespan
 
@@ -274,7 +275,7 @@ class GeneralModule(Module):
         config.cog = cog
 
         @config.command(name='spam')
-        async def config_spam(self, ctx: commands.Context, amount: int=0):
+        async def config_spam(ctx: commands.Context, amount: int=0):
             """Set how many messages a user can say in a short timespan before the bot removes them, setting to 0 disables"""
             await self.validate_permission_level(2, ctx)
 
@@ -290,7 +291,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.command(name='admin_contact')
-        async def config_admin_contact(self, ctx: commands.Context, *_account):
+        async def config_admin_contact(ctx: commands.Context, *_account):
             """Specify an admin account the user can contact"""
             await self.validate_permission_level(2, ctx)
             account = ' '.join(account)
@@ -322,7 +323,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.command(name='tor_block')
-        async def config_tor_block(self, ctx: commands.Context, on: str):
+        async def config_tor_block(ctx: commands.Context, on: str):
             """Turn on or off the tor exit node blocklist for verification"""
             await self.validate_permission_level(2, ctx)
 
@@ -338,7 +339,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
 
         @config.command(name='invite_link_filter')
-        async def config_invite_link_filter(self, ctx: commands.Context, on: str):
+        async def config_invite_link_filter(ctx: commands.Context, on: str):
             """Turn on or off the discord/guilded invite link filter"""
             await self.validate_permission_level(2, ctx)
 
@@ -354,7 +355,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.command(name='duplicate_filter')
-        async def config_duplicate_filter(self, ctx: commands.Context, on: str):
+        async def config_duplicate_filter(ctx: commands.Context, on: str):
             """Turn on or off the duplicate text filter"""
             await self.validate_permission_level(2, ctx)
 
@@ -370,7 +371,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.command(name='url_filter')
-        async def config_url_filter(self, ctx: commands.Context, on: str):
+        async def config_url_filter(ctx: commands.Context, on: str):
             """Turn on or off the malicious URL filter"""
             await self.validate_permission_level(2, ctx)
 
@@ -386,7 +387,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.command(name='mute_role')
-        async def config_mute_role(self, ctx: commands.Context, *_target):
+        async def config_mute_role(ctx: commands.Context, *_target):
             """Set the mute role"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -405,7 +406,7 @@ class GeneralModule(Module):
                     await ctx.reply('An unknown error occurred while performing this action.')
 
         @config.command(name='verification_channel')
-        async def config_verif_channel(self, ctx: commands.Context, *_target):
+        async def config_verif_channel(ctx: commands.Context, *_target):
             """Set the verification channel, specifying no channel disables verification"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -437,7 +438,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='nsfw_logs_channel')
-        async def config_nsfw_logs_channel(self, ctx: commands.Context, *_target):
+        async def config_nsfw_logs_channel(ctx: commands.Context, *_target):
             """[Premium Tier 1] Set the NSFW logs channel (Enables the NSFW filter)"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -462,7 +463,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='disable_nsfw')
-        async def config_disable_nsfw(self, ctx: commands.Context):
+        async def config_disable_nsfw(ctx: commands.Context):
             """Disable the NSFW filter"""
             await self.validate_permission_level(2, ctx)
 
@@ -478,7 +479,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.command(name='message_logs_channel')
-        async def config_message_logs_channel(self, ctx: commands.Context, *_target):
+        async def config_message_logs_channel(ctx: commands.Context, *_target):
             """Set the message logs channel"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -499,7 +500,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='traffic_logs_channel')
-        async def config_traffic_logs_channel(self, ctx: commands.Context, *_target):
+        async def config_traffic_logs_channel(ctx: commands.Context, *_target):
             """Set the traffic logs channel"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -520,7 +521,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
 
         @config.command(name='logs_channel')
-        async def config_logs_channel(self, ctx: commands.Context, *_target):
+        async def config_logs_channel(ctx: commands.Context, *_target):
             """Set the verify logs channel"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -541,7 +542,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='automod_logs_channel')
-        async def config_automod_logs_channel(self, ctx: commands.Context, *_target):
+        async def config_automod_logs_channel(ctx: commands.Context, *_target):
             """Set the automod logs channel"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -562,7 +563,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid channel!')
         
         @config.command(name='verified_role')
-        async def config_verified_role(self, ctx: commands.Context, *_target):
+        async def config_verified_role(ctx: commands.Context, *_target):
             """Set the verified role"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -583,7 +584,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid role!')
         
         @config.command(name='unverified_role')
-        async def config_unverified_role(self, ctx: commands.Context, *_target):
+        async def config_unverified_role(ctx: commands.Context, *_target):
             """Set the unverified role"""
             print(_target)
             target = ' '.join(_target)
@@ -605,12 +606,12 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid role!')
         
         @config.group(name='filter')
-        async def filter(self, ctx: commands.Context):
+        async def filter(ctx: commands.Context):
             """Configure the filters"""
             pass
         
         @filter.command(name='add')
-        async def filter_add_word(self, ctx: commands.Context, word: str):
+        async def filter_add_word(ctx: commands.Context, word: str):
             """Add a word to the filter list"""
             await self.validate_permission_level(2, ctx)
 
@@ -627,7 +628,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @filter.command(name='remove')
-        async def filter_remove_word(self, ctx: commands.Context, word: str):
+        async def filter_remove_word(ctx: commands.Context, word: str):
             """Remove a word from the filter list"""
             await self.validate_permission_level(2, ctx)
 
@@ -644,7 +645,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
 
         @filter.command(name='toxicity')
-        async def filter_toxicity(self, ctx: commands.Context, sensitivity: int=0):
+        async def filter_toxicity(ctx: commands.Context, sensitivity: int=0):
             """Set the toxicity filter's threshold, [0-100] (0 disables)"""
             await self.validate_permission_level(2, ctx)
             sensitivity = min(sensitivity, 100)
@@ -661,7 +662,7 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @filter.command(name='hatespeech')
-        async def filter_hatespeech(self, ctx: commands.Context, sensitivity: int=0):
+        async def filter_hatespeech(ctx: commands.Context, sensitivity: int=0):
             """Set the hate-speech filter's threshold, [0-100] (0 disables)"""
             await self.validate_permission_level(2, ctx)
             sensitivity = min(sensitivity, 100)
@@ -678,12 +679,12 @@ class GeneralModule(Module):
                 await ctx.reply('An unknown error occurred while performing this action.')
         
         @config.group(name='mod_role')
-        async def mod_role(self, ctx: commands.Context):
+        async def mod_role(ctx: commands.Context):
             """Configure the moderator roles"""
             pass
 
         @mod_role.command(name='add')
-        async def mod_add(self, ctx: commands.Context, *_target):
+        async def mod_add(ctx: commands.Context, *_target):
             """Add a moderator role"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -709,7 +710,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid role!')
         
         @mod_role.command(name='remove')
-        async def mod_remove(self, ctx: commands.Context, *_target):
+        async def mod_remove(ctx: commands.Context, *_target):
             """Remove a moderator role"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -735,12 +736,12 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid role!')
         
         @config.group(name='admin_role')
-        async def admin_role(self, ctx: commands.Context):
+        async def admin_role(ctx: commands.Context):
             """Configure administrator roles"""
             pass
 
         @admin_role.command(name='add')
-        async def admin_add(self, ctx: commands.Context, *_target):
+        async def admin_add(ctx: commands.Context, *_target):
             """Add a administrator role"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -766,7 +767,7 @@ class GeneralModule(Module):
                 await ctx.reply('Please specify a valid role!')
         
         @admin_role.command(name='remove')
-        async def admin_remove(self, ctx: commands.Context, *_target):
+        async def admin_remove(ctx: commands.Context, *_target):
             """Remove an administrator role"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -796,3 +797,18 @@ class GeneralModule(Module):
             if event.server_id == 'aE9Zg6Kj':
                 for member in event.after:
                     self.reset_user_premium_cache(member.id)
+        
+        @bot.event
+        async def on_bot_add(event: BotAddEvent):
+            server = event.server
+            default = await server.fetch_default_channel()
+            em = Embed(
+                title='Hello!',
+                description=f'Thanks <@{event.member_id}> for inviting me to **{server.name}!** To learn more about Server Guard use the /help command, or join our support server and look at the Information channel!',
+                timestamp=datetime.now(),
+                colour=Colour.gilded()
+            ) \
+            .set_footer(text='Server Guard') \
+            .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
+            .add_field(name='Links', value='[Support Server](https://www.guilded.gg/server-guard) • [Invite](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e)', inline=False)
+            await default.send(embed=em)

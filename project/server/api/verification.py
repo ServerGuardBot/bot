@@ -29,10 +29,11 @@ verify_cache = Cache(60 * 10, shared_dict)
 ip_cache = Cache(300, shared_ip_cache)
 
 tor_exit_nodes = []
-last_tor_node_get = None
+last_tor_node_get = 0
 
 def get_tor_exit_nodes():
-    if last_tor_node_get is None or abs(last_tor_node_get - datetime.now().timestamp()) > 60 * 30:
+    global last_tor_node_get
+    if abs(last_tor_node_get - datetime.now().timestamp()) > 60 * 30:
         last_tor_node_get = datetime.now().timestamp()
         req = requests.get('https://www.dan.me.uk/torlist/?exit')
         list = req.content
