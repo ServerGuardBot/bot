@@ -99,7 +99,7 @@ class ModerationModule(Module):
         cog = Moderation()
 
         @bot.command()
-        async def ban(self, ctx: commands.Context, target: str, timespan: str=None, *_reason):
+        async def ban(_, ctx: commands.Context, target: str, timespan: str=None, *_reason):
             """[Moderator+] Ban a user"""
             await self.validate_permission_level(1, ctx)
             user = self.convert_member(ctx, target)
@@ -149,7 +149,7 @@ class ModerationModule(Module):
         ban.cog = cog
         
         @bot.command()
-        async def unban(self, ctx: commands.Context, target: str):
+        async def unban(_, ctx: commands.Context, target: str):
             """[Moderator+] Unban a user"""
             await self.validate_permission_level(1, ctx)
             user = await user_converter.convert(ctx, target)
@@ -162,7 +162,7 @@ class ModerationModule(Module):
         unban.cog = cog
         
         @bot.command()
-        async def mute(self, ctx: commands.Context, target: str, timespan: str=None, *_reason):
+        async def mute(_, ctx: commands.Context, target: str, timespan: str=None, *_reason):
             """[Moderator+] Mute a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
@@ -210,12 +210,12 @@ class ModerationModule(Module):
                 if guild_data.get('config', {}).get('logs_channel'):
                     channel = await ctx.server.fetch_channel(guild_data['config']['logs_channel'])
                     await channel.send(embed=em)
-                await bot_api.session.close()
+            await bot_api.session.close()
         
         mute.cog = cog
         
         @bot.command()
-        async def unmute(self, ctx: commands.Context, target: str):
+        async def unmute(_, ctx: commands.Context, target: str):
             """[Moderator+] Unmute a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
@@ -237,7 +237,7 @@ class ModerationModule(Module):
         unmute.cog = cog
         
         @bot.command()
-        async def warn(self, ctx: commands.Context, target: str, timespan: str=None, *_reason):
+        async def warn(_, ctx: commands.Context, target: str, timespan: str=None, *_reason):
             """[Moderator+] Warn a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
@@ -281,7 +281,7 @@ class ModerationModule(Module):
         warn.cog = cog
         
         @bot.command()
-        async def warnings(self, ctx: commands.Context, target: str):
+        async def warnings(_, ctx: commands.Context, target: str):
             """[Moderator+] Get a user's warnings"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
@@ -299,7 +299,7 @@ class ModerationModule(Module):
         warnings.cog = cog
         
         @bot.command()
-        async def delwarn(self, ctx: commands.Context, target: str, id: str=None):
+        async def delwarn(_, ctx: commands.Context, target: str, id: str=None):
             """[Moderator+] Delete a user's warning(s)"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
@@ -328,7 +328,7 @@ class ModerationModule(Module):
         delwarn.cog = cog
         
         @bot.command()
-        async def userinfo(self, ctx: commands.Context, target: str):
+        async def userinfo(_, ctx: commands.Context, target: str):
             """[Moderator+] Get information on a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)

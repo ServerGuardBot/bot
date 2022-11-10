@@ -233,7 +233,7 @@ class GeneralModule(Module):
         bot._help_command.cog = cog
 
         @bot.command()
-        async def analytics(self, ctx: commands.Context):
+        async def analytics(_, ctx: commands.Context):
             """Bot creator-only command that displays bot analytics"""
             if ctx.author.id == 'm6YxwpQd':
                 uptime = abs(datetime.now().timestamp() - start_time)
@@ -248,7 +248,7 @@ class GeneralModule(Module):
         analytics.cog = cog
 
         @bot.command()
-        async def support(self, ctx: commands.Context):
+        async def support(_, ctx: commands.Context):
             """Get a link to the support server"""
             await ctx.reply(embed=Embed(
                 title='Support Server',
@@ -258,7 +258,7 @@ class GeneralModule(Module):
         support.cog = cog
         
         @bot.command()
-        async def invite(self, ctx: commands.Context):
+        async def invite(_, ctx: commands.Context):
             """Get an invite link for the bot"""
             await ctx.reply(embed=Embed(
                 title='Invite our Bot',
@@ -268,7 +268,7 @@ class GeneralModule(Module):
         invite.cog = cog
         
         @bot.group(invoke_without_command=True)
-        async def config(self, ctx: commands.Context):
+        async def config(_, ctx: commands.Context):
             """[Administrator] Configure the bot"""
             pass
 

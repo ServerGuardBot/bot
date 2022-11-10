@@ -26,7 +26,7 @@ class VerificationModule(Module):
         cog = Verification()
 
         @bot.command()
-        async def evaluate(self, ctx: commands.Context, target: str=None):
+        async def evaluate(_, ctx: commands.Context, target: str=None):
             """[Moderator+] Evaluate a user"""
             await self.validate_permission_level(1, ctx)
             user = target == None and ctx.author or await self.convert_member(ctx, target)
@@ -40,7 +40,7 @@ class VerificationModule(Module):
         evaluate.cog = cog
         
         @bot.command()
-        async def verify(self, ctx: commands.Context):
+        async def verify(_, ctx: commands.Context):
             """Verify with the bot"""
             guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
                 'authorization': bot_config.SECRET_KEY
@@ -82,7 +82,7 @@ class VerificationModule(Module):
         verify.cog = cog
         
         @bot.command()
-        async def bypass(self, ctx: commands.Context, target: str):
+        async def bypass(_, ctx: commands.Context, target: str):
             """[Moderator+] Grant a user a verification bypass"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
@@ -102,7 +102,7 @@ class VerificationModule(Module):
         bypass.cog = cog
         
         @bot.command()
-        async def unbypass(self, ctx: commands.Context, target: str):
+        async def unbypass(_, ctx: commands.Context, target: str):
             """[Moderator+] Revoke a user's verification bypass"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
