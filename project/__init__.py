@@ -43,12 +43,15 @@ ssl_context.minimum_version = ssl.TLSVersion.TLSv1
 
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
+managers = []
+
 def get_shared_state(host="127.0.0.1", port=35791, key=b"totally_secret"):
     shared_dict = {}
     shared_lock = Lock()
     manager = BaseManager((host, port), key)
     manager.register("get_dict", lambda: shared_dict, DictProxy)
     manager.register("get_lock", lambda: shared_lock, AcquirerProxy)
+    managers.append(manager)
     try:
         manager.get_server()
         manager.start()

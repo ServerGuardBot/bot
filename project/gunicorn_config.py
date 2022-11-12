@@ -1,5 +1,5 @@
 from guilded.ext import commands
-from project import client, app
+from project import client, app, managers
 
 import threading
 import multiprocessing
@@ -19,6 +19,12 @@ def on_starting(server):
     thread.start()
 
 def on_exit(server):
+    for manager in managers:
+        try:
+            manager.shutdown()
+        except Exception as e:
+            print('Failed to shut down manager:', str(e))
+    managers.clear()
     loop = client.loop
     print("Attempting to stop bot thread", flush=True)
     loop.stop()
