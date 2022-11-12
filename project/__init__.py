@@ -101,17 +101,20 @@ client = BotClient('/', experimental_event_style=True)
 malicious_urls = {}
 
 def load_malicious_url_db():
-    req = requests.get('https://urlhaus.abuse.ch/downloads/csv/')
-    zip = ZipFile(io.BytesIO(req.content))
-    item = zip.open('csv.txt')
-    reader = csv.reader(io.TextIOWrapper(item, 'utf-8'))
-    malicious_urls.clear()
-    for row in reader:
-        if len(row) < 2 or ('id' in row[0]):
-            continue
-        url = row[2]
-        threat = row[5]
-        malicious_urls[url] = threat
+    try:
+        req = requests.get('https://urlhaus.abuse.ch/downloads/csv/')
+        zip = ZipFile(io.BytesIO(req.content))
+        item = zip.open('csv.txt')
+        reader = csv.reader(io.TextIOWrapper(item, 'utf-8'))
+        malicious_urls.clear()
+        for row in reader:
+            if len(row) < 2 or ('id' in row[0]):
+                continue
+            url = row[2]
+            threat = row[5]
+            malicious_urls[url] = threat
+    except Exception as e:
+        print('WARNING: urlhaus API down, malicious URLs not being reloaded.')
 
 async def run_url_db_dl():
     while True:
