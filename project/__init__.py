@@ -1,6 +1,6 @@
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MemberJoinEvent, MemberRemoveEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
+from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
 from guilded.ext import commands
 from nsfw_detector import predict as nsfw_detect
 from zipfile import ZipFile
@@ -98,6 +98,9 @@ class BotClient(commands.Bot):
     topic_create_listeners: list = []
     topic_update_listeners: list = []
     topic_delete_listeners: list = []
+    member_role_update_listeners: list = []
+    ban_create_listeners: list = []
+    ban_delete_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
 
@@ -167,6 +170,22 @@ async def on_member_remove(event: MemberRemoveEvent):
             print('Failed to run leave listener:', e)
 
 @client.event
+async def on_ban_create(event: BanCreateEvent):
+    for callback in client.ban_create_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run ban create listener:', e)
+
+@client.event
+async def on_ban_delete(event: BanDeleteEvent):
+    for callback in client.ban_delete_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run ban delete listener:', e)
+
+@client.event
 async def on_message_update(event: MessageUpdateEvent):
     for callback in client.message_update_listeners:
         try:
@@ -205,6 +224,14 @@ async def on_forum_topic_delete(event: ForumTopicDeleteEvent):
             await callback(event)
         except Exception as e:
             print('Failed to run forum topic delete listener:', e)
+
+@client.event
+async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
+    for callback in client.member_role_update_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run member role update listener:', e)
 
 print('Registering Modules')
 modules = [str(m) for m in sys.modules if m.startswith('modules.')]

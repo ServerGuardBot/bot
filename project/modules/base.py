@@ -3,6 +3,7 @@ from guilded import Server, Member, User, http
 from guilded.ext import commands
 from guilded.ext.commands import Context, CommandError
 from project.helpers.Cache import Cache
+from project.helpers.embeds import *
 
 import requests
 import aiohttp
@@ -78,7 +79,7 @@ class Module:
 
         return ctx.server.channels
 
-    async def convert_member(self, ctx: commands.Context, member: str):
+    async def convert_member(self, ctx: commands.Context, member: str, accept_user: bool=False):
         match: re.Match = re.search(MEMBER_REGEX, member)
         member_id = match is not None and match.group(1) or member
 
@@ -88,6 +89,12 @@ class Module:
         for item in member_list:
             if item.id == member or item.name == member:
                 return item
+        if accept_user:
+            try:
+                user = await self.bot.getch_user(member)
+                return user
+            except:
+                pass
     
     async def convert_channel(self, ctx: commands.Context, channel: str):
         match: re.Match = re.search(CHANNEL_REGEX, channel)
@@ -145,6 +152,22 @@ class Module:
                     if (perms.get('general', 0) & MANAGE_SERVER_HEX) == MANAGE_SERVER_HEX:
                         return True
         return False
+    
+    async def user_can_manage_xp(self, member: Member):
+        guild_id = member.guild.id
+        guild = await self.get_guild_info(guild_id)
+
+        roles: dict = guild.get('rolesById', {})
+        user_role_ids: list = await member.fetch_role_ids()
+        for id in roles:
+            role: dict = roles[id]
+            if role['id'] in user_role_ids:
+                perms: dict = role.get('permissions')
+                if perms is not None:
+                    MANAGE_XP_HEX = 1
+                    if (perms.get('xp', 0) & MANAGE_XP_HEX) == MANAGE_XP_HEX:
+                        return True
+        return False
 
     async def get_user_premium_status(self, user_id):
         cached = premium_cache.get(user_id)
@@ -184,21 +207,46 @@ class Module:
         elif level == 1:
             if not await self.is_moderator(member):
                 allowed = False
-                await ctx.reply('You need to be a Moderator to use this command!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('You need to be a Moderator to use this command!'))
                 raise CommandError('You need to be a Moderator to use this command!')
         elif level == 2:
             if not await self.is_admin(member):
                 allowed = False
-                await ctx.reply('You need to be an Admin to use this command!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('You need to be an Admin to use this command!'))
                 raise CommandError('You need to be an Admin to use this command!')
         return allowed
     
     async def get_member_from_user(self, guild: Server, user: User):
         return await guild.fetch_member(user.id)
     
+    async def is_trusted(self, user: Member):
+        from project import bot_config
+        guild = await self.bot.getch_server(user.server.id)
+        if user.id == guild.owner.id:
+            return True # We know the owner of the guild is trusted, bypass any unnecessary calls and checks
+        if await self.user_can_manage_server(user):
+            return True
+        
+        role_config_req = requests.get(f'http://localhost:5000/guilddata/{user.guild.id}/cfg/trusted_roles', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+        role_config_json: dict = role_config_req.json()
+        if role_config_req.status_code == 200:
+            role_set: list[dict] = role_config_json['result']
+            role_ids: list[int] = await user.fetch_role_ids()
+            for role in role_set:
+                try:
+                    i = role_ids.index(int(role))
+                    return True
+                except Exception as e:
+                    pass
+
+        return False
+
     async def is_moderator(self, user: Member):
         from project import bot_config
-        if user.id == user.guild.owner.id:
+        guild = await self.bot.getch_server(user.server.id)
+        if user.id == guild.owner.id:
             return True # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
         if await self.user_can_manage_server(user):
             return True
@@ -221,7 +269,8 @@ class Module:
     
     async def is_admin(self, user: Member):
         from project import bot_config
-        if user.id == user.guild.owner.id:
+        guild = await self.bot.getch_server(user.server.id)
+        if user.id == guild.owner.id:
             return True # We know the owner of the guild is an admin, bypass any unnecessary calls and checks
         if await self.user_can_manage_server(user):
             return True

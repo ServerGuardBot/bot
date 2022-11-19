@@ -6,7 +6,7 @@ from project.helpers.Cache import Cache
 from project.modules.base import Module
 from project import bot_config, bot_api, malicious_urls
 from guilded.ext import commands
-from guilded import Embed, Colour, MemberJoinEvent, MemberRemoveEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
+from guilded import Embed, Colour, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
 from humanfriendly import parse_timespan, format_timespan
 from better_profanity import Profanity
 
@@ -19,6 +19,8 @@ import numpy as np
 user_converter = commands.UserConverter()
 
 SERVER_INVITE_REGEX = r'h?t?t?p?s?:?\/?\/?w?w?w?\.?(discord\.gg|discordapp\.com\/invite|guilded\.gg|guilded\.com|guilded\.gg\/i|guilded\.com\/i)\/([\w/-]+)'
+IMAGE_EMBED_REGEX = r'\!\[(.*?)\]\((.*?)\)'
+USER_AGENT = 'guilded-server-guard/image-check'
 
 MODELS_ROOT = bot_config.PROJECT_ROOT + '/project/ml_models'
 
@@ -102,7 +104,7 @@ class ModerationModule(Module):
         async def ban(_, ctx: commands.Context, target: str, timespan: str=None, *_reason):
             """[Moderator+] Ban a user"""
             await self.validate_permission_level(1, ctx)
-            user = self.convert_member(ctx, target)
+            user = await self.convert_member(ctx, target)
 
             if await self.is_moderator(user):
                 await ctx.reply('This user is a moderator, I can\'t do that!')
@@ -152,12 +154,17 @@ class ModerationModule(Module):
         async def unban(_, ctx: commands.Context, target: str):
             """[Moderator+] Unban a user"""
             await self.validate_permission_level(1, ctx)
-            user = await user_converter.convert(ctx, target)
+            user = await self.convert_member(ctx, target, True)
+
+            if user is None:
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                return
 
             await ctx.server.unban(user)
             requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/ban', headers={
                 'authorization': bot_config.SECRET_KEY
             })
+            await ctx.reply(embed=EMBED_SUCCESS(f'{user.name} was unbanned'))
 
         unban.cog = cog
         
@@ -166,6 +173,10 @@ class ModerationModule(Module):
             """[Moderator+] Mute a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
+
+            if user is None:
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                return
 
             bot_api.session = aiohttp.ClientSession()
 
@@ -220,6 +231,10 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
+            if user is None:
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                return
+
             bot_api.session = aiohttp.ClientSession()
 
             guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
@@ -232,6 +247,7 @@ class ModerationModule(Module):
             requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/mute', headers={
                 'authorization': bot_config.SECRET_KEY
             })
+            await ctx.reply(embed=EMBED_SUCCESS(f'{user.mention} was unmuted'))
             await bot_api.session.close()
         
         unmute.cog = cog
@@ -241,6 +257,10 @@ class ModerationModule(Module):
             """[Moderator+] Warn a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
+
+            if user is None:
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                return
 
             guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
                 'authorization': bot_config.SECRET_KEY
@@ -286,15 +306,23 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
+            if user is None:
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                return
+
             result = requests.get(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/warnings', headers={
                 'authorization': bot_config.SECRET_KEY
             })
-            em = Embed(
-                title = f'Warnings for {user.name}',
-                description = ''.join([f'{item["id"]} | <@{item["issuer"]}> - {item["reason"]}\n' for item in result.json()['result']]),
-                colour = Colour.orange()
-            )
-            await ctx.reply(embed=em)
+            if result.status_code == 200:
+                warns = result.json()
+                em = Embed(
+                    title = f'Warnings for {user.name}',
+                    description = len(warns) > 0 and ''.join([f'{item["id"]} | <@{item["issuer"]}> - {item["reason"]}\n' for item in warns['result']]) or 'This user has no warnings',
+                    colour = Colour.orange()
+                )
+                await ctx.reply(embed=em)
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(), private=True)
         
         warnings.cog = cog
         
@@ -303,6 +331,10 @@ class ModerationModule(Module):
             """[Moderator+] Delete a user's warning(s)"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
+
+            if user is None:
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                return
 
             if id:
                 result = requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/warnings/{id}', headers={
@@ -313,17 +345,12 @@ class ModerationModule(Module):
                     description = f'Successfully cleared warning {id} for {user.name}',
                     colour = Colour.green()
                 )
-                await ctx.reply(embed=em)
+                await ctx.reply(embed=result.status_code == 404 and EMBED_COMMAND_ERROR(f'A warning with id {id} for user {user.name} does not exist') or em)
             else:
                 result = requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/warnings', headers={
                     'authorization': bot_config.SECRET_KEY
                 })
-                em = Embed(
-                    title = f'Warnings for {user.name} cleared',
-                    description = f'Successfully cleared all warnings for {user.name}!',
-                    colour = Colour.green()
-                )
-                await ctx.reply(embed=em)
+                await ctx.reply(embed=EMBED_SUCCESS(f'Successfully cleared all warnings for {user.name}!'))
         
         delwarn.cog = cog
         
@@ -332,6 +359,10 @@ class ModerationModule(Module):
             """[Moderator+] Get information on a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
+
+            if user is None:
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                return
 
             if user is not None:
                 user = await ctx.server.fetch_member(user.id)
@@ -350,6 +381,27 @@ class ModerationModule(Module):
                 await ctx.reply(embed=em)
         
         userinfo.cog = cog
+        
+        @bot.command()
+        async def reset_xp(_, ctx: commands.Context, *_target):
+            """[Manage XP] Reset the XP of all mentioned users"""
+            if (not await self.user_can_manage_xp(ctx.author)) and not ctx.author.id == ctx.server.owner_id:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('You need to be able to manage XP to use this command!'))
+                return
+            
+            reset_members = []
+
+            for user in ctx.message.mentions:
+                try:
+                    member = await ctx.server.getch_member(user.id)
+                    await member.edit(xp=0)
+                    reset_members.append(member)
+                except Exception as e:
+                    pass
+            NEWLINE = '\n'
+            await ctx.reply(embed=EMBED_SUCCESS(f'The levels of the following users have been reset:{NEWLINE}{NEWLINE.join([member.mention for member in reset_members])}'))
+        
+        reset_xp.cog = cog
         
         async def on_member_join(event: MemberJoinEvent):
             member = event.member
@@ -390,32 +442,91 @@ class ModerationModule(Module):
         bot.join_listeners.append(on_member_join)
 
         async def on_member_remove(event: MemberRemoveEvent):
+            if event.banned:
+                return
             member = await bot.getch_user(event.user_id)
 
             guild_data: dict = self.get_guild_data(event.server_id)
             traffic_log_channel = guild_data.get('config', {}).get('traffic_logs_channel')
 
             if traffic_log_channel is not None and traffic_log_channel != '':
-                created_time = member.created_at.timestamp()
-                diff = abs(datetime.now().timestamp() - created_time)
+                if member.created_at is not None:
+                    created_time = member.created_at.timestamp()
+                    diff = abs(datetime.now().timestamp() - created_time)
                 em = Embed(
-                    title=f'{member.name} left the server',
+                    title=event.kicked and f'{member.name} was kicked' or f'{member.name} left the server',
                     url=member.profile_url,
-                    colour=Colour.gilded()
+                    colour=event.kicked and Colour.red() or Colour.gilded()
                 )
                 em.set_thumbnail(url=member.avatar is not None and member.avatar.aws_url or IMAGE_DEFAULT_AVATAR)
                 em.add_field(name='User ID', value=member.id)
-                em.add_field(name='Account created', value=member.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
+                if member.created_at is not None:
+                    em.add_field(name='Account created', value=member.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
                 channel = await bot.getch_channel(traffic_log_channel)
                 await channel.send(embed=em)
         
         bot.leave_listeners.append(on_member_remove)
+
+        async def on_ban_create(event: BanCreateEvent):
+            ban_info = event.ban
+            member = await bot.getch_user(ban_info.user.id)
+
+            guild_data: dict = self.get_guild_data(event.server_id)
+            traffic_log_channel = guild_data.get('config', {}).get('traffic_logs_channel')
+
+            if traffic_log_channel is not None and traffic_log_channel != '':
+                if member.created_at is not None:
+                    created_time = member.created_at.timestamp()
+                    diff = abs(datetime.now().timestamp() - created_time)
+                em = Embed(
+                    title=f'{member.name} has been banned',
+                    url=member.profile_url,
+                    colour=Colour.red()
+                )
+                em.set_thumbnail(url=member.avatar is not None and member.avatar.aws_url or IMAGE_DEFAULT_AVATAR)
+                em.add_field(name='User ID', value=member.id)
+                if member.created_at is not None:
+                    em.add_field(name='Account created', value=member.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
+                em.add_field(name='Banned by', value=ban_info.author.mention, inline=True)
+                em.add_field(name='Ban Reason', value=ban_info.reason, inline=False)
+                channel = await bot.getch_channel(traffic_log_channel)
+                await channel.send(embed=em)
+        
+        bot.ban_create_listeners.append(on_ban_create)
+
+        async def on_ban_delete(event: BanDeleteEvent):
+            ban_info = event.ban
+            member = await bot.getch_user(ban_info.user.id)
+
+            guild_data: dict = self.get_guild_data(event.server_id)
+            traffic_log_channel = guild_data.get('config', {}).get('traffic_logs_channel')
+
+            if traffic_log_channel is not None and traffic_log_channel != '':
+                if member.created_at is not None:
+                    created_time = member.created_at.timestamp()
+                    diff = abs(datetime.now().timestamp() - created_time)
+                em = Embed(
+                    title=f'{member.name} has been unbanned',
+                    url=member.profile_url,
+                    colour=Colour.green()
+                )
+                em.set_thumbnail(url=member.avatar is not None and member.avatar.aws_url or IMAGE_DEFAULT_AVATAR)
+                em.add_field(name='User ID', value=member.id)
+                if member.created_at is not None:
+                    em.add_field(name='Account created', value=member.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
+                em.add_field(name='Banned by', value=ban_info.author.mention, inline=True)
+                em.add_field(name='Ban Reason', value=ban_info.reason, inline=False)
+                channel = await bot.getch_channel(traffic_log_channel)
+                await channel.send(embed=em)
+        
+        bot.ban_delete_listeners.append(on_ban_delete)
 
         async def handle_text_message(message):
             guild_data: dict = self.get_guild_data(message.server_id)
             config = guild_data.get('config', {})
             custom_filter = config.get('filters')
             logs_channel_id = config.get('automod_logs_channel')
+            trusted = await self.is_trusted(message.author)
             if logs_channel_id:
                 logs_channel = await bot.getch_channel(logs_channel_id)
             else:
@@ -445,7 +556,7 @@ class ModerationModule(Module):
 
             if config.get('invite_link_filter', 0) == 1:
                 for domain, invite in re.findall(SERVER_INVITE_REGEX, message.content):
-                    if '/' in invite:
+                    if '/' in invite and not 'i/' in invite:
                         continue
                     if isinstance(message, ChatMessage):
                         await message.reply(embed=EMBED_FILTERED(message.author, 'Invite Link Detected'), private=True)
@@ -456,7 +567,7 @@ class ModerationModule(Module):
                             description=message.content,
                             url=message.share_url,
                             colour = Colour.red(),
-                        ).add_field(name='Invite Link', value=domain + '/' + invite, inline=False)\
+                        ).add_field(name='Invite Link', value='https://www.' + domain + '/' + invite, inline=False)\
                         .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
                     return True
             
@@ -504,6 +615,46 @@ class ModerationModule(Module):
                             url=message.share_url,
                             colour = Colour.orange(),
                         ).add_field(name='User', value=message.author.name).add_field(name='Filtered Message', value=filter.censor(message.content), inline=False))
+            if trusted is False:
+                untrusted_block_images = config.get('untrusted_block_images', False)
+                if untrusted_block_images:
+                    for _, link in re.findall(r'\[(.*?)\]\((.*?)\)', message.content):
+                        if link.startswith('https://media.tenor.com/') and not '@' in link:
+                            continue
+                        if re.search(r'.+(.(jpe?g?|jif|jfif?|png|gif|bmp|dib|webp|tiff?|raw|arw|cr2|nrw|k25|heif|heic|indd?|indt|jp2|j2k|jpf|jpx|jpm|mj2|svgz?|ai|eps))', link):
+                            if isinstance(message, ChatMessage):
+                                await message.reply(embed=EMBED_FILTERED(message.author, 'Only trusted users are permitted to post links containing images'), private=True)
+                            await message.delete()
+                            return True
+                        try:
+                            head_req = requests.head(link, headers={
+                                'user-agent': USER_AGENT
+                            })
+                            if head_req.status_code == 200:
+                                content_type = head_req.headers.get('content-type')
+                                blocked = False
+                                if 'image' in content_type:
+                                    blocked = True
+                                elif 'html' in content_type:
+                                    page_req = requests.get(link, headers={
+                                        'user-agent': USER_AGENT
+                                    })
+                                    if page_req.status_code == 200:
+                                        for url in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:image|"og:image"|og:image))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
+                                            blocked = True
+                                            break
+                                        for keywords in re.findall(r"""< *meta +name *= *[\"\'] *keywords *[\"\'] *content= *[\"'](.+)[\"\'] *>""", page_req.text):
+                                            keywords: str = keywords.lower()
+                                            if 'video' in keywords or not 'image' in keywords:
+                                                blocked = False
+                                                break
+                                if blocked is True:
+                                    if isinstance(message, ChatMessage):
+                                        await message.reply(embed=EMBED_FILTERED(message.author, 'Only trusted users are permitted to post links containing images'), private=True)
+                                    await message.delete()
+                                    return True
+                        except:
+                            pass
             return False
 
         async def on_message_update(event: MessageUpdateEvent):

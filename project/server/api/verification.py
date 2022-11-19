@@ -98,7 +98,7 @@ class VerifyUser(MethodView):
 
         try:
             token = verif_token.decode_token(t)
-            hashed_ip = hashlib.sha512(request.environ.get('HTTP_X_REAL_IP', request.remote_addr).encode('utf-8')).hexdigest()
+            hashed_ip = hashlib.sha512(request.headers.get('cf-connecting-ip', request.environ.get('HTTP_X_REAL_IP', request.remote_addr)).encode('utf-8')).hexdigest()
 
             db_guild: dict = (await bot_api.get_server(token.guild_id)).get('server')
             guild: Guild = Guild.query.filter_by(guild_id = token.guild_id).first()

@@ -100,67 +100,79 @@ def generate_embed(evaluation: dict, passed_check: bool=None):
 def eval_roblox(id: str):
     if id == None:
         return None
-    result = requests.get(f'https://users.roblox.com/v1/users/{id}')
+    try:
+        result = requests.get(f'https://users.roblox.com/v1/users/{id}')
 
-    if result.status_code == 200:
-        contents = result.json()
-        if contents['isBanned'] == True:
-            return 95
+        if result.status_code == 200:
+            contents = result.json()
+            if contents['isBanned'] == True:
+                return 95
 
-        created_at = parser.parse(contents['created']).replace(tzinfo=None)
-        age = (datetime.now().replace(tzinfo=None) - created_at).total_seconds()
-        age_score = round((1 - (abs(min(age, ACCOUNT_AGE_THRESHOLD)) / ACCOUNT_AGE_THRESHOLD)) * 100)
+            created_at = parser.parse(contents['created']).replace(tzinfo=None)
+            age = (datetime.now().replace(tzinfo=None) - created_at).total_seconds()
+            age_score = round((1 - (abs(min(age, ACCOUNT_AGE_THRESHOLD)) / ACCOUNT_AGE_THRESHOLD)) * 100)
 
-        return max(age_score - (contents['hasVerifiedBadge'] and 15 or 0), 0)
-    else:
+            return max(age_score - (contents['hasVerifiedBadge'] and 15 or 0), 0)
+        else:
+            return None
+    except:
         return None
 
 def eval_steam(id: int):
     if id == None:
         return None
-    result = requests.get(f'http://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key={bot_config.STEAM_KEY}&steamid={id}')
+    try:
+        result = requests.get(f'http://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key={bot_config.STEAM_KEY}&steamid={id}')
 
-    if result.status_code == 200:
-        contents = result.json()
+        if result.status_code == 200:
+            contents = result.json()
 
-        return min((max(10 - contents['response'].get('player_level', 0), 0) / 10) * 100, 100)
-    else:
+            return min((max(10 - contents['response'].get('player_level', 0), 0) / 10) * 100, 100)
+        else:
+            return None
+    except:
         return None
 
 def eval_youtube(id: str):
     if id == None:
         return None
-    result = requests.get(f'https://www.googleapis.com/youtube/v3/channels?part=snippet&id={id}&key={bot_config.YOUTUBE_KEY}')
+    try:
+        result = requests.get(f'https://www.googleapis.com/youtube/v3/channels?part=snippet&id={id}&key={bot_config.YOUTUBE_KEY}')
 
-    if result.status_code == 200:
-        contents = result.json()
+        if result.status_code == 200:
+            contents = result.json()
 
-        created_at = parser.parse(contents['items'][0]['snippet']['publishedAt']).replace(tzinfo=None)
-        age = (datetime.now().replace(tzinfo=None) - created_at).total_seconds()
-        age_score = round((1 - (abs(min(age, ACCOUNT_AGE_THRESHOLD)) / ACCOUNT_AGE_THRESHOLD)) * 100)
+            created_at = parser.parse(contents['items'][0]['snippet']['publishedAt']).replace(tzinfo=None)
+            age = (datetime.now().replace(tzinfo=None) - created_at).total_seconds()
+            age_score = round((1 - (abs(min(age, ACCOUNT_AGE_THRESHOLD)) / ACCOUNT_AGE_THRESHOLD)) * 100)
 
-        return max(age_score, 0)
-    else:
+            return max(age_score, 0)
+        else:
+            return None
+    except:
         return None
 
 def eval_twitter(id: str):
     if id == None:
         return None
-    result = requests.get(f'https://api.twitter.com/2/users/by/username/{id}?user.fields=created_at,verified,public_metrics', headers={
-        'Authorization': f'Bearer {bot_config.TWITTER_BEARER}'
-    })
+    try:
+        result = requests.get(f'https://api.twitter.com/2/users/by/username/{id}?user.fields=created_at,verified,public_metrics', headers={
+            'Authorization': f'Bearer {bot_config.TWITTER_BEARER}'
+        })
 
-    if result.status_code == 200:
-        contents = result.json()
+        if result.status_code == 200:
+            contents = result.json()
 
-        if contents['data']['verified']:
-            return 0
+            if contents['data']['verified']:
+                return 0
 
-        created_at = parser.parse(contents['data']['created_at']).replace(tzinfo=None)
-        age = (datetime.now().replace(tzinfo=None) - created_at).total_seconds()
-        age_score = round((1 - (abs(min(age, ACCOUNT_AGE_THRESHOLD)) / ACCOUNT_AGE_THRESHOLD)) * 70)
-        tweets_score = round(1 - (contents['data']['public_metrics']['tweet_count']/15) * 30)
+            created_at = parser.parse(contents['data']['created_at']).replace(tzinfo=None)
+            age = (datetime.now().replace(tzinfo=None) - created_at).total_seconds()
+            age_score = round((1 - (abs(min(age, ACCOUNT_AGE_THRESHOLD)) / ACCOUNT_AGE_THRESHOLD)) * 70)
+            tweets_score = round(1 - (contents['data']['public_metrics']['tweet_count']/15) * 30)
 
-        return max(age_score + tweets_score, 0)
-    else:
+            return max(age_score + tweets_score, 0)
+        else:
+            return None
+    except:
         return None

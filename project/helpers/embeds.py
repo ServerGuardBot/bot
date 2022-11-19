@@ -61,6 +61,24 @@ EMBED_DENIED_ADMIN = EMBED_DENIED(
     colour=Colour.red()
 )
 
+def EMBED_COMMAND_ERROR(err: str = 'An unexpected error occurred'):
+    em = Embed(
+        title='An Error Occurred',
+        description=f'An error occurred and the command could not be executed: {err}',
+        colour=Colour.orange()
+    )
+    em.set_thumbnail(url=IMAGE_DENIED)
+    return em
+
+def EMBED_SUCCESS(msg: str = 'Successfully executed command'):
+    em = Embed(
+        title='Success',
+        description=msg,
+        colour=Colour.green()
+    )
+    #em.set_thumbnail(url=IMAGE_GIL_THUMBS_UP)
+    return em
+
 def EMBED_NEEDS_PREMIUM(tier: int):
     em = Embed(
         title='Premium-Only Feature',

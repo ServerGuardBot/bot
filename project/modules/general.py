@@ -3,10 +3,11 @@ import re
 from project.modules.base import Module
 from project.modules.moderation import reset_filter_cache
 from project.helpers.embeds import *
+from project.helpers.Cache import Cache
 from project import bot_config
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
-from guilded import Embed, BulkMemberRolesUpdateEvent, BotAddEvent, http
+from guilded import Embed, BulkMemberRolesUpdateEvent, BotAddEvent, ChatMessage, http
 from datetime import datetime
 from humanfriendly import format_timespan
 
@@ -17,6 +18,8 @@ import itertools
 member = commands.MemberConverter()
 channel = commands.ChatChannelConverter()
 role = commands.RoleConverter()
+
+xp_cache = Cache(60)
 
 class CustomHelpCommand(HelpCommand):
     def __init__(self, **options):
@@ -43,7 +46,8 @@ class CustomHelpCommand(HelpCommand):
                 colour = Colour.gilded()
             ) \
             .set_footer(text='Server Guard') \
-            .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp')
+            .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
+            .add_field(name='Links', value='[Support Server](https://www.guilded.gg/server-guard) • [Invite](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e) • [Docs](https://www.guilded.gg/server-guard/groups/D57rgP7z/channels/7ad31d28-0577-4f18-a80d-d401ceacf9db/docs)', inline=False)
             await destination.send(embed=em)
     
     def shorten_text(self, text):
@@ -56,8 +60,7 @@ class CustomHelpCommand(HelpCommand):
         """:class:`str`: Returns help command's ending note. This is mainly useful to override for i18n purposes."""
         command_name = self.invoked_with
         return (
-            f"Type {self.context.clean_prefix}{command_name} command for more info on a command.\n"
-            f"You can also type {self.context.clean_prefix}{command_name} category for more info on a category."
+            f"Type {self.context.clean_prefix}{command_name} command for more info on a command."
         )
     
     def add_bot_commands_formatting(self, commands, heading):
@@ -286,9 +289,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully changed automod spam limit.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed automod spam limit.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @config.command(name='admin_contact')
         async def config_admin_contact(ctx: commands.Context, *_account):
@@ -318,9 +321,9 @@ class GeneralModule(Module):
                 })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully changed tor blocking status.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed tor blocking status.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @config.command(name='tor_block')
         async def config_tor_block(ctx: commands.Context, on: str):
@@ -334,9 +337,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully changed tor blocking status.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed tor blocking status.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
 
         @config.command(name='invite_link_filter')
         async def config_invite_link_filter(ctx: commands.Context, on: str):
@@ -350,9 +353,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully changed invite filtering status.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed invite filtering status.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @config.command(name='duplicate_filter')
         async def config_duplicate_filter(ctx: commands.Context, on: str):
@@ -366,9 +369,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully changed duplicate text filtering status.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed duplicate text filtering status.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @config.command(name='url_filter')
         async def config_url_filter(ctx: commands.Context, on: str):
@@ -382,9 +385,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully changed url filtering status.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed url filtering status.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @config.command(name='mute_role')
         async def config_mute_role(ctx: commands.Context, *_target):
@@ -401,9 +404,9 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed muted role.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed muted role.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
 
         @config.command(name='verification_channel')
         async def config_verif_channel(ctx: commands.Context, *_target):
@@ -420,9 +423,9 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed verification channel.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed verification channel.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             elif target.isspace() or target == '':
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verification_channel', json={
                     'value': ''
@@ -431,11 +434,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully disabled verification.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully disabled verification.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid channel!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
         
         @config.command(name='nsfw_logs_channel')
         async def config_nsfw_logs_channel(ctx: commands.Context, *_target):
@@ -456,11 +459,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed NSFW logs channel.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed NSFW logs channel.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid channel!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
         
         @config.command(name='disable_nsfw')
         async def config_disable_nsfw(ctx: commands.Context):
@@ -474,9 +477,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully changed NSFW logs channel.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed NSFW logs channel.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @config.command(name='message_logs_channel')
         async def config_message_logs_channel(ctx: commands.Context, *_target):
@@ -493,11 +496,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed message logs channel.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed message logs channel.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid channel!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
         
         @config.command(name='traffic_logs_channel')
         async def config_traffic_logs_channel(ctx: commands.Context, *_target):
@@ -514,11 +517,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed traffic logs channel.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed traffic logs channel.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid channel!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
 
         @config.command(name='logs_channel')
         async def config_logs_channel(ctx: commands.Context, *_target):
@@ -535,11 +538,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed logs channel.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed logs channel.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid channel!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
         
         @config.command(name='automod_logs_channel')
         async def config_automod_logs_channel(ctx: commands.Context, *_target):
@@ -556,11 +559,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed automod logs channel.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed automod logs channel.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid channel!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
         
         @config.command(name='verified_role')
         async def config_verified_role(ctx: commands.Context, *_target):
@@ -577,11 +580,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed verified role.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed verified role.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid role!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
         
         @config.command(name='unverified_role')
         async def config_unverified_role(ctx: commands.Context, *_target):
@@ -599,11 +602,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully changed unverified role.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed unverified role.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid role!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
         
         @config.group(name='filter')
         async def filter(ctx: commands.Context):
@@ -623,9 +626,9 @@ class GeneralModule(Module):
 
             if result.status_code == 200 or result.status_code == 201:
                 reset_filter_cache(ctx.server.id)
-                await ctx.reply(f'Successfully added "{word}" to filter.')
+                await ctx.reply(embed=EMBED_SUCCESS(f'Successfully added "{word}" to filter.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @filter.command(name='remove')
         async def filter_remove_word(ctx: commands.Context, word: str):
@@ -640,9 +643,9 @@ class GeneralModule(Module):
 
             if result.status_code == 204:
                 reset_filter_cache(ctx.server.id)
-                await ctx.reply(f'Successfully removed "{word}" from filter.')
+                await ctx.reply(embed=EMBED_SUCCESS(f'Successfully removed "{word}" from filter.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
 
         @filter.command(name='toxicity')
         async def filter_toxicity(ctx: commands.Context, sensitivity: int=0):
@@ -657,9 +660,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully set toxicity filter.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully set toxicity filter.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @filter.command(name='hatespeech')
         async def filter_hatespeech(ctx: commands.Context, sensitivity: int=0):
@@ -674,9 +677,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply('Successfully set hate speech filter.')
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully set hate speech filter.'))
             else:
-                await ctx.reply('An unknown error occurred while performing this action.')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         
         @config.group(name='mod_role')
         async def mod_role(ctx: commands.Context):
@@ -701,13 +704,13 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully added mod role.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully added mod role.'))
                 elif result.status_code == 400:
-                    await ctx.reply('This is already a mod role.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is already a mod role.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid role!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
         
         @mod_role.command(name='remove')
         async def mod_remove(ctx: commands.Context, *_target):
@@ -727,13 +730,13 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 204:
-                    await ctx.reply('Successfully removed mod role.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully removed mod role.'))
                 elif result.status_code == 400:
-                    await ctx.reply('This is not a mod role.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is not a mod role.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid role!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
         
         @config.group(name='admin_role')
         async def admin_role(ctx: commands.Context):
@@ -758,13 +761,13 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply('Successfully added admin role.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully added admin role.'))
                 elif result.status_code == 400:
-                    await ctx.reply('This is already an admin role.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is already an admin role.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid role!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
         
         @admin_role.command(name='remove')
         async def admin_remove(ctx: commands.Context, *_target):
@@ -784,19 +787,248 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 204:
-                    await ctx.reply('Successfully removed admin role.')
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully removed admin role.'))
                 elif result.status_code == 400:
-                    await ctx.reply('This is not an admin role.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is not an admin role.'))
                 else:
-                    await ctx.reply('An unknown error occurred while performing this action.')
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
-                await ctx.reply('Please specify a valid role!')
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+        
+        @config.group(name='trusted_role')
+        async def trusted_role(ctx: commands.Context):
+            """Configure trusted roles"""
+            pass
 
-        @bot.event
+        @trusted_role.command(name='add')
+        async def trusted_add(ctx: commands.Context, *_target):
+            """Add a trusted role"""
+            target = ' '.join(_target)
+            await self.validate_permission_level(2, ctx)
+            ref = await self.convert_role(ctx, target)
+
+            if ref is not None:
+                result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/trusted_roles', json={
+                    'value': ref['id']
+                }, headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
+                if result.status_code == 200 or result.status_code == 201:
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully added trusted role.'))
+                elif result.status_code == 400:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is already a trusted role.'))
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+        
+        @trusted_role.command(name='remove')
+        async def trusted_remove(ctx: commands.Context, *_target):
+            """Remove a trusted role"""
+            target = ' '.join(_target)
+            await self.validate_permission_level(2, ctx)
+            ref = await self.convert_role(ctx, target)
+
+            if ref is not None:
+                result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/trusted_roles', json={
+                    'value': ref['id']
+                }, headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
+                if result.status_code == 200 or result.status_code == 204:
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully removed trusted role.'))
+                elif result.status_code == 400:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is not a trusted role.'))
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+        
+        @trusted_role.command(name='block_images')
+        async def trusted_block_images(ctx: commands.Context, on: str):
+            """Turn on or off image link blocking for untrusted users"""
+            await self.validate_permission_level(2, ctx)
+
+            result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/untrusted_block_images', json={
+                'value': on == 'yes' and 1 or 0
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+
+            if result.status_code == 200 or result.status_code == 201:
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully toggled untrusted user image blocking.'))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+
+        @config.group(name='welcomer')
+        async def welcomer(ctx: commands.Context):
+            """Configure the welcomer"""
+            pass
+
+        @welcomer.command(name='set_enabled')
+        async def welcomer_set_enabled(ctx: commands.Context, on: str):
+            """Enable/disable the welcomer"""
+            await self.validate_permission_level(2, ctx)
+
+            result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/use_welcome', json={
+                'value': on == 'yes' and 1 or 0
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+
+            if result.status_code == 200 or result.status_code == 201:
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully toggled welcomer.'))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+
+        @welcomer.command(name='message')
+        async def welcomer_message(ctx: commands.Context, *_target):
+            """Set the welcomer's message, supports the following translation phrases:
+            {mention} - Welcomed user's ping
+            {server_name} - The name of the server"""
+            await self.validate_permission_level(2, ctx)
+
+            message = ' '.join(_target)
+            if message.isspace():
+                message = 'Hello {mention} and welcome to {server_name}!\n\nRemember to read the rules before interacting in this server!' # fallback
+
+            result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/welcome_message', json={
+                'value': message
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+
+            if result.status_code == 200 or result.status_code == 201:
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed welcome message.'))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+
+        @welcomer.command(name='image')
+        async def welcomer_image(ctx: commands.Context, image: str = ''):
+            """Set the welcomer's image"""
+            await self.validate_permission_level(2, ctx)
+
+            url = re.search("(?P<url>https?://[^\s]+)", image).group("url")
+
+            if url:
+                result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/welcome_image', json={
+                    'value': url
+                }, headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
+                if result.status_code == 200 or result.status_code == 201:
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed welcome image.'))
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please provide a valid image URL!'))
+
+        @welcomer.command(name='channel')
+        async def welcomer_channel(ctx: commands.Context, *_target):
+            """Set the welcomer's channel"""
+            await self.validate_permission_level(2, ctx)
+
+            target = ' '.join(_target)
+            await self.validate_permission_level(2, ctx)
+            ref = await self.convert_channel(ctx, target)
+
+            if ref is not None:
+                result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/welcome_channel', json={
+                    'value': ref['id']
+                }, headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
+                if result.status_code == 200 or result.status_code == 201:
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed the welcomer channel.'))
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+        
+        @config.group(name='xp')
+        async def xp(ctx: commands.Context):
+            """Configure the xp giver"""
+            pass
+
+        def change_xp_gain(guild, role_id, value):
+            orig_result = requests.get(f'http://localhost:5000/guilddata/{guild}/cfg/xp_gain', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+
+            orig = (orig_result.status_code == 200 and orig_result.json().get('result')) or {}
+            orig[role_id] = value
+            
+            result = requests.patch(f'http://localhost:5000/guilddata/{guild}/cfg/xp_gain', json={
+                'value': orig
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            return result
+
+        @xp.command(name='all')
+        async def xp_all(ctx: commands.Context, value):
+            """Set the XP gain for all users"""
+            if int(value) is not None:
+                result = change_xp_gain(ctx.server.id, -1, int(value))
+
+                if result.status_code >= 200 and result.status_code < 300:
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed the XP gain for all members'))
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR())
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid number!'))
+        
+        @xp.command(name='role')
+        async def xp_role(ctx: commands.Context, role: str, value: str):
+            """Set the XP gain for a specified role, setting to 0 disables"""
+            role_object = await self.convert_role(ctx, role)
+            if role_object is None:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                return
+            if int(value) is not None:
+                result = change_xp_gain(ctx.server.id, role_object.get('id'), int(value))
+
+                if result.status_code >= 200 and result.status_code < 300:
+                    await ctx.reply(embed=EMBED_SUCCESS(f'Successfully changed the XP gain for role <@{role_object.get("id")}>'), silent=True)
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR())
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid number!'))
+
         async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
             if event.server_id == 'aE9Zg6Kj':
                 for member in event.after:
                     self.reset_user_premium_cache(member.id)
+        bot.member_role_update_listeners.append(on_bulk_member_roles_update)
+
+        async def on_message(message: ChatMessage):
+            id = f'{message.guild.id}/{message.author.id}'
+            if message.author.bot:
+                return
+            if xp_cache.get(id):
+                return # They cannot gain xp at this point in time
+            guild_data: dict = self.get_guild_data(message.server_id)
+            config = guild_data.get('config', {})
+            xp_gain = config.get('xp_gain', {})
+            print(xp_gain)
+            if len(xp_gain) > 0 and any([item > 0 for item in list(xp_gain.values())]):
+                # Only go further if there are any gains that a user can possibly obtain
+                member = await message.guild.getch_member(message.author.id)
+                role_ids = await member.fetch_role_ids()
+                gain = 0
+                for role_id in xp_gain.keys():
+                    role_id = int(role_id)
+                    value = int(xp_gain.get(str(role_id)))
+                    if role_id == -1 or int(role_id) in role_ids:
+                        gain += value
+                if gain > 0:
+                    xp_cache.set(id, True)
+                    await member.award_xp(gain)
+        self.bot.message_listeners.append(on_message)
         
         @bot.event
         async def on_bot_add(event: BotAddEvent):

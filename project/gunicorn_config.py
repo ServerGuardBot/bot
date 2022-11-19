@@ -9,7 +9,19 @@ preload_app = True
 
 def run():
     # Run the bot
-    client.run(app.config.get('GUILDED_BOT_TOKEN'))
+    while True:
+        try:
+            client.run(app.config.get('GUILDED_BOT_TOKEN'))
+        except Exception as e:
+            print('BOT CRASHED:', e)
+            async def runner():
+                with client:
+                    await client.close()
+            try:
+                asyncio.run(runner())
+            except Exception as e:
+                print('FAILED TO STOP BOT:', e)
+                break
 
 thread = threading.Thread(target=run)
 
