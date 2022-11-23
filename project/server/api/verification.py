@@ -106,7 +106,7 @@ class VerifyUser(MethodView):
             premium_status = await get_user_premium_status(db_guild.get('ownerId'))
 
             block_tor = guild.config.get('block_tor')
-            logs_channel = guild.config.get('logs_channel')
+            logs_channel = guild.config.get('verify_logs_channel', guild.config.get('logs_channel'))
 
             verified_role = guild.config.get('verified_role')
             unverified_role = guild.config.get('unverified_role')

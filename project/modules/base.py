@@ -13,8 +13,9 @@ guild_data_cache = Cache(60)
 guild_info_cache = Cache(20)
 premium_cache = Cache()
 
-MEMBER_REGEX = r'@(.+)'
-CHANNEL_REGEX = r'#(.+)'
+MEMBER_REGEX = r'<@(.+)>'
+ROLE_REGEX = r'<@&(.+)>'
+CHANNEL_REGEX = r'<#(.+)>'
 
 class Module:
     bot: commands.Bot
@@ -47,31 +48,21 @@ class Module:
         if cached:
             return cached
         else:
-            try:
-                self.bot_api.session = aiohttp.ClientSession()
-                cached = (await self.bot_api.request(http.Route('GET', f'/teams/{guild_id}/info', override_base=http.Route.USER_BASE))).get('team')
-                await self.bot_api.session.close()
-            except Exception:
-                cached = {}
+            cached = await self.bot.fetch_public_server(guild_id)
             guild_info_cache.set(guild_id, cached)
             return cached
 
     async def get_ctx_members(self, ctx: commands.Context):
-        guild_id = ctx.server.id
-
-        return await ctx.server.fetch_members()
+        return await ctx.server.members
 
     async def get_ctx_roles(self, ctx: commands.Context):
         guild_id = ctx.server.id
         guild = await self.get_guild_info(guild_id)
 
         roleList = []
-        roles: dict = guild.get('rolesById', {})
-
-        for key in roles.keys():
-            roleList.append(roles.get(key))
+        roles = guild.roles
         
-        return roleList
+        return roles
 
     async def get_ctx_channels(self, ctx: commands.Context):
         guild_id = ctx.server.id
@@ -82,12 +73,14 @@ class Module:
     async def convert_member(self, ctx: commands.Context, member: str, accept_user: bool=False):
         match: re.Match = re.search(MEMBER_REGEX, member)
         member_id = match is not None and match.group(1) or member
+        is_mention = False
 
         if member_id is not None:
             member = member_id
-        member_list = await self.get_ctx_members(ctx)
+            is_mention = True
+        member_list = is_mention and ctx.message.user_mentions or await self.get_ctx_members(ctx)
         for item in member_list:
-            if item.id == member or item.name == member:
+            if item.id == member or item.name == member or item.nick == member:
                 return item
         if accept_user:
             try:
@@ -99,26 +92,24 @@ class Module:
     async def convert_channel(self, ctx: commands.Context, channel: str):
         match: re.Match = re.search(CHANNEL_REGEX, channel)
         channel_id = match is not None and match.group(1) or channel
+        is_mention = False
 
         if channel_id is not None:
             channel = channel_id
-        channel_list = await self.get_ctx_channels(ctx)
+            is_mention = True
+        channel_list = is_mention and ctx.message.channel_mentions or await self.get_ctx_channels(ctx)
         print(channel_list)
         for item in channel_list:
             if item.id == channel or item.name == channel:
-                return {
-                    'id': item.id
-                } #await self.bot.getch_channel(item.id)
+                return res
         try:
             res = await self.bot.getch_channel(channel)
-            return {
-                'id': res.id
-            }
+            return res
         except Exception:
             return None
     
     async def convert_role(self, ctx: commands.Context, role: str):
-        match: re.Match = re.search(MEMBER_REGEX, role)
+        match: re.Match = re.search(ROLE_REGEX, role)
         role_id = match is not None and match.group(1) or role
 
         if role_id is not None:
@@ -130,57 +121,47 @@ class Module:
             pass
         role_list = await self.get_ctx_roles(ctx)
         for item in role_list:
-            if item['id'] == role_int or item['name'] == role:
+            if item.id == role_int or item.name == role:
                 return item
         if role_int:
-            return {
-                'id': role
-            }
+            return role
     
     async def user_can_manage_server(self, member: Member):
         guild_id = member.guild.id
         guild = await self.get_guild_info(guild_id)
 
-        roles: dict = guild.get('rolesById', {})
+        roles = guild.roles
         user_role_ids: list = await member.fetch_role_ids()
-        for id in roles:
-            role: dict = roles[id]
-            if role['id'] in user_role_ids:
-                perms: dict = role.get('permissions')
-                if perms is not None:
-                    MANAGE_SERVER_HEX = 4
-                    if (perms.get('general', 0) & MANAGE_SERVER_HEX) == MANAGE_SERVER_HEX:
-                        return True
+        for role in roles:
+            if role.id in user_role_ids:
+                if role.permissions.manage_server:
+                    return True
         return False
     
     async def user_can_manage_xp(self, member: Member):
         guild_id = member.guild.id
         guild = await self.get_guild_info(guild_id)
 
-        roles: dict = guild.get('rolesById', {})
+        roles = guild.roles
         user_role_ids: list = await member.fetch_role_ids()
-        for id in roles:
-            role: dict = roles[id]
-            if role['id'] in user_role_ids:
-                perms: dict = role.get('permissions')
-                if perms is not None:
-                    MANAGE_XP_HEX = 1
-                    if (perms.get('xp', 0) & MANAGE_XP_HEX) == MANAGE_XP_HEX:
-                        return True
+        for role in roles:
+            if role.id in user_role_ids:
+                if role.permissions.manage_server_xp:
+                    return True
         return False
 
     async def get_user_premium_status(self, user_id):
         cached = premium_cache.get(user_id)
         if cached is not None:
             return cached
-        self.bot_api.session = aiohttp.ClientSession()
         try:
-            roles = await self.bot_api.get_member_roles('aE9Zg6Kj', user_id)
+            support_server = await self.bot.getch_server('aE9Zg6Kj')
+            member = await support_server.getch_member(user_id)
+            roles = await member.fetch_role_ids()
         except Exception:
             roles = None
-        if roles is not None:
-            roles = roles['roleIds']
-        else:
+
+        if roles is None:
             roles = []
 
         if 32612283 in roles:
@@ -193,7 +174,6 @@ class Module:
             cached = 0
         
         premium_cache.set(user_id, cached)
-        await self.bot_api.session.close()
         return cached
     
     def reset_user_premium_cache(self, user_id):
@@ -201,7 +181,7 @@ class Module:
 
     async def validate_permission_level(self, level: int, ctx: Context):
         allowed = True
-        member = await ctx.guild.fetch_member(ctx.author.id)
+        member = await ctx.guild.getch_member(ctx.author.id)
         if level == 0:
             pass
         elif level == 1:
@@ -217,7 +197,7 @@ class Module:
         return allowed
     
     async def get_member_from_user(self, guild: Server, user: User):
-        return await guild.fetch_member(user.id)
+        return await guild.getch_member(user.id)
     
     async def is_trusted(self, user: Member):
         from project import bot_config

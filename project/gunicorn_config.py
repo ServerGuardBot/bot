@@ -9,19 +9,15 @@ preload_app = True
 
 def run():
     # Run the bot
-    while True:
-        try:
-            client.run(app.config.get('GUILDED_BOT_TOKEN'))
-        except Exception as e:
-            print('BOT CRASHED:', e)
-            async def runner():
-                with client:
-                    await client.close()
-            try:
-                asyncio.run(runner())
-            except Exception as e:
-                print('FAILED TO STOP BOT:', e)
-                break
+    did_crash = False
+    try:
+        client.run(app.config.get('GUILDED_BOT_TOKEN'))
+    except Exception as e:
+        did_crash = True
+        print('BOT CRASHED:', e)
+    if did_crash is False:
+        print('Bot was disconnected, restarting...')
+    raise SystemExit(0) # If the program exits, the service will just automatically restart anyway
 
 thread = threading.Thread(target=run)
 

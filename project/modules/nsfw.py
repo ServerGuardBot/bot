@@ -1,7 +1,7 @@
 from datetime import datetime
 from project.modules.base import Module
 from project.helpers.Cache import Cache
-from project import bot_config, nsfw_model, nsfw_detect
+from project import bot_config, get_nsfw_model, nsfw_detect
 from guilded import Embed, ChatMessage, Colour, MemberJoinEvent, http
 from os import remove
 
@@ -44,12 +44,12 @@ class NSFWModule(Module):
         
         return classification, certainty
 
-    def scan_image(self, url):
+    async def scan_image(self, url):
         path = f'/tmp/guilded-{"".join(random.choices(string.ascii_letters, k=15))}-{datetime.now().timestamp()}'
         with open(path, mode='wb+') as file:
             img = requests.get(url).content
             file.write(img)
-            results = nsfw_detect.classify(nsfw_model, path).get(path)
+            results = nsfw_detect.classify(await get_nsfw_model(), path).get(path)
             remove(path)
             return self.check_model_results(results)
 
@@ -65,7 +65,7 @@ class NSFWModule(Module):
                 logs_channel_id = self.get_logs_channel(event.server_id)
                 premium_status = await self.get_user_premium_status(event.server.owner_id)
                 if logs_channel_id and logs_channel_id != '' and premium_status is not 0:
-                    classification, certainty = self.scan_image(member.avatar.aws_url)
+                    classification, certainty = await self.scan_image(member.avatar.aws_url)
 
                     if classification == 'NSFW':
                         em = Embed(
@@ -97,7 +97,7 @@ class NSFWModule(Module):
             if logs_channel_id and logs_channel_id != '' and premium_status is not 0:
                 for item in message.attachments:
                     if any(f'.{ele}' in item.url for ele in ['jpeg', 'jpg', 'tif', 'tiff', 'gif', 'jif', 'png', 'webp', 'bmp', 'apng']):
-                        classification, certainty = self.scan_image(item.url)
+                        classification, certainty = await self.scan_image(item.url)
                         
                         if classification == 'NSFW':
                             em = Embed(

@@ -4,6 +4,7 @@ from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, Member
 from guilded.ext import commands
 from nsfw_detector import predict as nsfw_detect
 from zipfile import ZipFile
+from project.helpers.Cache import Cache
 
 from project.modules.base import Module
 
@@ -82,11 +83,29 @@ bot_config: project.config.BaseConfig = configs[app_settings] # A custom copy of
 bot_api = http.HTTPClient()
 bot_api.token = app.config.get('GUILDED_BOT_TOKEN')
 
-nsfw_model = nsfw_detect.load_model(app.config.get('PROJECT_ROOT') + '/project/ml_models/nsfw.h5')
+nsfw_model = None
+nsfw_loaded = False
+def load_nsfw():
+    print('Loading NSFW Model')
+    global nsfw_model
+    nsfw_model = nsfw_detect.load_model(app.config.get('PROJECT_ROOT') + '/project/ml_models/nsfw.h5')
+    global nsfw_loaded
+    nsfw_loaded = True
+    print('NSFW Model Has Been Loaded')
+
+async def get_nsfw_model():
+    while nsfw_loaded is False:
+        await asyncio.sleep(.1)
+    return nsfw_model
+
+nsfw_thread = Thread(target=load_nsfw)
+nsfw_thread.start()
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 cors = CORS(app, send_wildcard=True, origins="*")
+
+guild_cache = Cache()
 
 class BotClient(commands.Bot):
     config = app.config
@@ -103,6 +122,14 @@ class BotClient(commands.Bot):
     ban_delete_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
+
+async def get_public_guild(guild_id):
+    cached = guild_cache.get(guild_id)
+    if cached:
+        return cached
+    cached = await client.fetch_public_server(guild_id)
+    guild_cache.set(guild_id, cached)
+    return cached
 
 malicious_urls = {}
 
@@ -146,10 +173,21 @@ async def on_ready():
 
 @client.event
 async def on_message(event: MessageEvent):
-    await client.process_commands(event.message)
+    message = event.message
+    server = await get_public_guild(event.server_id)
+    # Replace all mentions that it can in the message with properly parseable formats
+    for member in message.user_mentions:
+        message.content = message.content.replace(f'@{member.display_name}', f'<@{member.id}>')
+    for role_id in message.raw_role_mentions:
+        role = server.get_role(role_id)
+        message.content = message.content.replace(f'@{role.name}', f'<@&{role.id}>')
+    for channel_id in message.raw_channel_mentions:
+        channel = await message.server.getch_channel(channel_id)
+        message.content = message.content.replace(f'#{channel.name}', f'<#{channel.id}>')
+    await client.process_commands(message)
     for callback in client.message_listeners:
         try:
-            await callback(event.message)
+            await callback(message)
         except Exception as e:
             print('Failed to run message listener:', e)
 

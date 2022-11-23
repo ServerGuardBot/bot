@@ -398,7 +398,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/mute_role', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -417,7 +417,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verification_channel', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -453,7 +453,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/nsfw_logs_channel', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -490,7 +490,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/message_logs_channel', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -511,7 +511,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/traffic_logs_channel', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -523,27 +523,48 @@ class GeneralModule(Module):
             else:
                 await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
 
-        @config.command(name='logs_channel')
-        async def config_logs_channel(ctx: commands.Context, *_target):
+        @config.command(name='verify_logs_channel')
+        async def config_verify_logs_channel(ctx: commands.Context, *_target):
             """Set the verify logs channel"""
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
 
             if ref is not None:
-                result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/logs_channel', json={
-                    'value': ref['id']
+                result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verify_logs_channel', json={
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed logs channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed verify logs channel.'))
                 else:
                     await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
             else:
                 await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
-        
+
+        @config.command(name='action_logs_channel')
+        async def config_action_logs_channel(ctx: commands.Context, *_target):
+            """Set the action logs channel"""
+            target = ' '.join(_target)
+            await self.validate_permission_level(2, ctx)
+            ref = await self.convert_channel(ctx, target)
+
+            if ref is not None:
+                result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/action_logs_channel', json={
+                    'value': ref.id
+                }, headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
+                if result.status_code == 200 or result.status_code == 201:
+                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed action logs channel.'))
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+
         @config.command(name='automod_logs_channel')
         async def config_automod_logs_channel(ctx: commands.Context, *_target):
             """Set the automod logs channel"""
@@ -553,7 +574,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/automod_logs_channel', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -574,7 +595,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verified_role', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -596,7 +617,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/unverified_role', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -696,7 +717,7 @@ class GeneralModule(Module):
             if ref is not None:
                 result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
-                        'id': ref['id'],
+                        'id': ref.id,
                         'level': 0
                     }
                 }, headers={
@@ -722,7 +743,7 @@ class GeneralModule(Module):
             if ref is not None:
                 result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
-                        'id': ref['id'],
+                        'id': ref.id,
                         'level': 0
                     }
                 }, headers={
@@ -753,7 +774,7 @@ class GeneralModule(Module):
             if ref is not None:
                 result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
-                        'id': ref['id'],
+                        'id': ref.id,
                         'level': 1
                     }
                 }, headers={
@@ -779,7 +800,7 @@ class GeneralModule(Module):
             if ref is not None:
                 result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
-                        'id': ref['id'],
+                        'id': ref.id,
                         'level': 1
                     }
                 }, headers={
@@ -809,7 +830,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/trusted_roles', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -832,7 +853,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/trusted_roles', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })
@@ -937,7 +958,7 @@ class GeneralModule(Module):
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/welcome_channel', json={
-                    'value': ref['id']
+                    'value': ref.id
                 }, headers={
                     'authorization': bot_config.SECRET_KEY
                 })

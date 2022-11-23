@@ -114,6 +114,8 @@ class ModerationModule(Module):
                 'authorization': bot_config.SECRET_KEY
             })
             guild_data: dict = guild_data_req.json()
+            config = guild_data.get('config', {})
+            logs_channel = config.get('action_logs_channel', config.get('logs_channel'))
 
             reason = ' '.join(_reason)
 
@@ -144,8 +146,8 @@ class ModerationModule(Module):
                     em.add_field(name='Lasts', value=format_timespan(timespan))
                 em.add_field(name='Reason', value=reason, inline=False)
                 await ctx.reply(embed=em)
-                if guild_data.get('config', {}).get('logs_channel'):
-                    channel = await ctx.server.fetch_channel(guild_data['config']['logs_channel'])
+                if logs_channel:
+                    channel = await ctx.server.fetch_channel(logs_channel)
                     await channel.send(embed=em)
         
         ban.cog = cog
@@ -188,6 +190,8 @@ class ModerationModule(Module):
                 'authorization': bot_config.SECRET_KEY
             })
             guild_data: dict = guild_data_req.json()
+            config = guild_data.get('config', {})
+            logs_channel = config.get('action_logs_channel', config.get('logs_channel'))
 
             reason = ' '.join(_reason)
 
@@ -199,8 +203,8 @@ class ModerationModule(Module):
                     timespan = None
             
             if user is not None:
-                if guild_data.get('config', {}).get('mute_role'):
-                    await bot_api.assign_role_to_member(ctx.server.id, user.id, guild_data['config']['mute_role'])
+                if config.get('mute_role'):
+                    await bot_api.assign_role_to_member(ctx.server.id, user.id, config['mute_role'])
                 requests.post(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/mute', json={
                     'issuer': ctx.author.id,
                     'reason': reason,
@@ -218,8 +222,8 @@ class ModerationModule(Module):
                     em.add_field(name='Lasts', value=format_timespan(timespan))
                 em.add_field(name='Reason', value=reason, inline=False)
                 await ctx.reply(embed=em)
-                if guild_data.get('config', {}).get('logs_channel'):
-                    channel = await ctx.server.fetch_channel(guild_data['config']['logs_channel'])
+                if logs_channel:
+                    channel = await ctx.server.fetch_channel(logs_channel)
                     await channel.send(embed=em)
             await bot_api.session.close()
         
@@ -266,6 +270,8 @@ class ModerationModule(Module):
                 'authorization': bot_config.SECRET_KEY
             })
             guild_data: dict = guild_data_req.json()
+            config = guild_data.get('config', {})
+            logs_channel = config.get('action_logs_channel', config.get('logs_channel'))
 
             reason = ' '.join(_reason)
 
@@ -294,8 +300,8 @@ class ModerationModule(Module):
                     em.add_field(name='Lasts', value=format_timespan(timespan))
                 em.add_field(name='Reason', value=reason, inline=False)
                 await ctx.reply(embed=em)
-                if guild_data.get('config', {}).get('logs_channel'):
-                    channel = await ctx.server.fetch_channel(guild_data['config']['logs_channel'])
+                if logs_channel:
+                    channel = await ctx.server.fetch_channel(logs_channel)
                     await channel.send(embed=em)
         
         warn.cog = cog
@@ -404,7 +410,8 @@ class ModerationModule(Module):
         reset_xp.cog = cog
         
         async def on_member_join(event: MemberJoinEvent):
-            member = event.member
+            print('RECEIVED MEMBER JOIN EVENT.')
+            member = await event.server.getch_member(event.member.id)
 
             bot_api.session = aiohttp.ClientSession()
 
@@ -412,16 +419,17 @@ class ModerationModule(Module):
                 'authorization': bot_config.SECRET_KEY
             })
             guild_data: dict = guild_data_req.json()
+            config = guild_data.get('config', {})
 
             mute_req = requests.get(f'http://localhost:5000/moderation/{event.server_id}/{member.id}/mute', headers={
                 'authorization': bot_config.SECRET_KEY
             })
 
             if mute_req.status_code == 200:
-                if guild_data.get('config', {}).get('mute_role'):
-                    await bot_api.assign_role_to_member(event.server_id, member.id, guild_data['config']['mute_role'])
+                if config.get('mute_role'):
+                    await bot_api.assign_role_to_member(event.server_id, member.id, config['mute_role'])
             
-            traffic_log_channel = guild_data.get('config', {}).get('traffic_logs_channel')
+            traffic_log_channel = config.get('traffic_logs_channel')
 
             if traffic_log_channel is not None and traffic_log_channel != '':
                 created_time = member.created_at.timestamp()
@@ -434,6 +442,13 @@ class ModerationModule(Module):
                 em.set_thumbnail(url=member.avatar is not None and member.avatar.aws_url or IMAGE_DEFAULT_AVATAR)
                 em.add_field(name='User ID', value=member.id)
                 em.add_field(name='Account created', value=member.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
+                em.add_field(name='Account joined', value=member.joined_at.strftime("%b %d %Y at %H:%M %p %Z"))
+                if config.get('toxicity', 0) > 0:
+                    toxicity_proba_name = round(apply_filter('toxicity', [member.name])[0] * 100)
+                    em.add_field(name='Profile Toxicity', value=f'{toxicity_proba_name}%')
+                if config.get('hatespeech', 0) > 0:
+                    hatespeech_proba_name = round(apply_filter('hatespeech', [member.name])[0] * 100)
+                    em.add_field(name='Profile Hate-Speech', value=f'{hatespeech_proba_name}%')
                 channel = await bot.getch_channel(traffic_log_channel)
                 await channel.send(embed=em)
 
@@ -447,7 +462,8 @@ class ModerationModule(Module):
             member = await bot.getch_user(event.user_id)
 
             guild_data: dict = self.get_guild_data(event.server_id)
-            traffic_log_channel = guild_data.get('config', {}).get('traffic_logs_channel')
+            config = guild_data.get('config', {})
+            traffic_log_channel = config.get('traffic_logs_channel')
 
             if traffic_log_channel is not None and traffic_log_channel != '':
                 if member.created_at is not None:
