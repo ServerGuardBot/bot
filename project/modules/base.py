@@ -79,35 +79,27 @@ class Module:
     async def convert_member(self, ctx: commands.Context, member: str, accept_user: bool=False):
         match: re.Match = re.search(MEMBER_REGEX, member)
         member_id = match is not None and match.group(1) or member
-        is_mention = False
 
         if member_id is not None:
             member = member_id
-            is_mention = True
-        member_list = is_mention and ctx.message.user_mentions or await self.get_ctx_members(ctx)
-        for item in member_list:
-            if item.id == member or item.name == member or item.nick == member:
-                return item
+        try:
+            res = await ctx.server.getch_member(member)
+            return res
+        except:
+            pass
         if accept_user:
             try:
                 user = await self.bot.getch_user(member)
                 return user
             except:
-                pass
+                return None
     
     async def convert_channel(self, ctx: commands.Context, channel: str):
         match: re.Match = re.search(CHANNEL_REGEX, channel)
         channel_id = match is not None and match.group(1) or channel
-        is_mention = False
 
         if channel_id is not None:
             channel = channel_id
-            is_mention = True
-        channel_list = is_mention and ctx.message.channel_mentions or await self.get_ctx_channels(ctx)
-        print(channel_list)
-        for item in channel_list:
-            if item.id == channel or item.name == channel:
-                return res
         try:
             res = await self.bot.getch_channel(channel)
             return res
