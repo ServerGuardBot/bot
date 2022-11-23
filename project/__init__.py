@@ -126,10 +126,17 @@ client = BotClient('/', experimental_event_style=True)
 async def get_public_guild(guild_id):
     cached = guild_cache.get(guild_id)
     if cached:
+        if cached == 'PRIVATE':
+            return None
         return cached
-    cached = await client.fetch_public_server(guild_id)
-    guild_cache.set(guild_id, cached)
-    return cached
+    try:
+        cached = await client.fetch_public_server(guild_id)
+        guild_cache.set(guild_id, cached)
+        return cached
+    except:
+        # The guild is likely private, indicate as such and return none
+        guild_cache.set(guild_id, 'PRIVATE')
+        return None
 
 malicious_urls = {}
 
@@ -178,9 +185,10 @@ async def on_message(event: MessageEvent):
     # Replace all mentions that it can in the message with properly parseable formats
     for member in message.user_mentions:
         message.content = message.content.replace(f'@{member.display_name}', f'<@{member.id}>')
-    for role_id in message.raw_role_mentions:
-        role = server.get_role(role_id)
-        message.content = message.content.replace(f'@{role.name}', f'<@&{role.id}>')
+    if server is not None:
+        for role_id in message.raw_role_mentions:
+            role = server.get_role(role_id)
+            message.content = message.content.replace(f'@{role.name}', f'<@&{role.id}>')
     for channel_id in message.raw_channel_mentions:
         channel = await message.server.getch_channel(channel_id)
         message.content = message.content.replace(f'#{channel.name}', f'<#{channel.id}>')

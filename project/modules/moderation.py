@@ -20,7 +20,7 @@ user_converter = commands.UserConverter()
 
 SERVER_INVITE_REGEX = r'h?t?t?p?s?:?\/?\/?w?w?w?\.?(discord\.gg|discordapp\.com\/invite|guilded\.gg|guilded\.com|guilded\.gg\/i|guilded\.com\/i)\/([\w/-]+)'
 IMAGE_EMBED_REGEX = r'\!\[(.*?)\]\((.*?)\)'
-USER_AGENT = 'guilded-server-guard/image-check'
+USER_AGENT = 'Guilded Server Guard/1.0 (Image Check)'
 
 MODELS_ROOT = bot_config.PROJECT_ROOT + '/project/ml_models'
 
@@ -410,7 +410,6 @@ class ModerationModule(Module):
         reset_xp.cog = cog
         
         async def on_member_join(event: MemberJoinEvent):
-            print('RECEIVED MEMBER JOIN EVENT.')
             member = await event.server.getch_member(event.member.id)
 
             bot_api.session = aiohttp.ClientSession()
@@ -659,6 +658,11 @@ class ModerationModule(Module):
                                         for url in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:image|"og:image"|og:image))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
                                             blocked = True
                                             break
+                                        for og_type in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:type|"og:type"|og:type))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
+                                            og_type: str = og_type.lower().strip()
+                                            if og_type.startswith(('article', 'website', 'book', 'profile', 'video', 'music')):
+                                                blocked = False
+                                                break
                                         for keywords in re.findall(r"""< *meta +name *= *[\"\'] *keywords *[\"\'] *content= *[\"'](.+)[\"\'] *>""", page_req.text):
                                             keywords: str = keywords.lower()
                                             if 'video' in keywords or not 'image' in keywords:
@@ -687,7 +691,7 @@ class ModerationModule(Module):
                 channel = await bot.getch_channel(message_log_channel)
                 member = event.after.author
                 em = Embed(
-                    title=f'Message edited in {event.after.channel.name}',
+                    title=f'Message edited in {event.after.channel.name or (await bot.getch_channel(event.after.channel_id)).name}',
                     url=event.after.share_url,
                     colour=Colour.gilded(),
                     timestamp=datetime.now()
@@ -714,7 +718,7 @@ class ModerationModule(Module):
                 channel = await bot.getch_channel(message_log_channel)
                 member = event.message.author
                 em = Embed(
-                    title=f'Message deleted in {event.message.channel.name}',
+                    title=f'Message deleted in {event.message.channel.name or (await bot.getch_channel(event.message.channel_id)).name}',
                     url=event.message.share_url,
                     colour=event.private and Colour.purple() or Colour.red(),
                     timestamp=event.deleted_at

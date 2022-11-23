@@ -46,11 +46,18 @@ class Module:
         cached = guild_info_cache.get(guild_id)
 
         if cached:
+            if cached == 'PRIVATE':
+                return None
             return cached
         else:
-            cached = await self.bot.fetch_public_server(guild_id)
-            guild_info_cache.set(guild_id, cached)
-            return cached
+            try:
+                cached = await self.bot.fetch_public_server(guild_id)
+                guild_info_cache.set(guild_id, cached)
+                return cached
+            except:
+                # The guild is likely private, indicate as such and return none
+                guild_info_cache.set(guild_id, 'PRIVATE')
+                return None
 
     async def get_ctx_members(self, ctx: commands.Context):
         return await ctx.server.members
@@ -59,10 +66,9 @@ class Module:
         guild_id = ctx.server.id
         guild = await self.get_guild_info(guild_id)
 
-        roleList = []
-        roles = guild.roles
-        
-        return roles
+        if guild is not None:
+            return guild.roles
+        return []
 
     async def get_ctx_channels(self, ctx: commands.Context):
         guild_id = ctx.server.id
@@ -130,6 +136,9 @@ class Module:
         guild_id = member.guild.id
         guild = await self.get_guild_info(guild_id)
 
+        if guild is None:
+            return False
+
         roles = guild.roles
         user_role_ids: list = await member.fetch_role_ids()
         for role in roles:
@@ -141,6 +150,9 @@ class Module:
     async def user_can_manage_xp(self, member: Member):
         guild_id = member.guild.id
         guild = await self.get_guild_info(guild_id)
+
+        if guild is None:
+            return False
 
         roles = guild.roles
         user_role_ids: list = await member.fetch_role_ids()
