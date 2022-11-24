@@ -68,7 +68,7 @@ class VerificationModule(Module):
         ) \
         .set_footer(text='Server Guard') \
         .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
-        .add_field(name='Click Below', value=f'[{link}](https://serverguard.reapimus.com/verify/{link})', inline=False)
+        .add_field(name='Click Below', value=f'[{link}](https://serverguard.xyz/verify/{link})', inline=False)
 
         await channel.send(embed=em, private=True)
 
