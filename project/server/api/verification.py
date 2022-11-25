@@ -170,7 +170,7 @@ class VerifyUser(MethodView):
                     'message': 'Please use a browser to verify with us!'
                 }), 403
 
-            ip = request.environ.get("HTTP_X_REAL_IP", request.remote_addr)
+            ip = request.headers.get('cf-connecting-ip', request.environ.get('HTTP_X_REAL_IP', request.remote_addr))
             cached_ip = ip_cache.get(f'{token.guild_id}/{ip}')
             if cached_ip is None:
                 cached_ip = 1
