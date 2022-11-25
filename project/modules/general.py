@@ -297,7 +297,7 @@ class GeneralModule(Module):
         async def config_admin_contact(ctx: commands.Context, *_account):
             """Specify an admin account the user can contact"""
             await self.validate_permission_level(2, ctx)
-            account = ' '.join(account)
+            account = ' '.join(_account)
 
             ref = await self.convert_member(ctx, account)
 
@@ -314,14 +314,19 @@ class GeneralModule(Module):
                     'authorization': bot_config.SECRET_KEY
                 })
             else:
-                result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/admin_contact', json={
-                    'value': account
-                }, headers={
-                    'authorization': bot_config.SECRET_KEY
-                })
+                link_match = re.search(r'\[(.*?)\]\((.*?)\)', account)
+                if link_match:
+                    result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/admin_contact', json={
+                        'value': link_match.lastgroup
+                    }, headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This command expects a URL, Valid Email, or User to be specified.'))
+                    return
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed tor blocking status.'))
+                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed server admin contact.'))
             else:
                 await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
         

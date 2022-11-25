@@ -15,6 +15,7 @@ import requests
 import aiohttp
 import joblib
 import numpy as np
+import unicodedata
 
 user_converter = commands.UserConverter()
 
@@ -42,6 +43,9 @@ def _get_prob(prob):
     return prob[1]
 
 def apply_filter(filter: str, texts: list):
+    new_texts = []
+    for text in texts:
+        new_texts.append(unicodedata.normalize('NFKD', text).encode('ascii', 'ignore'))
     if not filters.get(filter):
         raise Exception('Filter not found')
     f = filters[filter]
