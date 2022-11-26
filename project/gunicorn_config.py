@@ -17,7 +17,7 @@ def run():
         print('BOT CRASHED:', e)
     if did_crash is False:
         print('Bot was disconnected, restarting...')
-    raise SystemExit(0) # If the program exits, the service will just automatically restart anyway
+    raise SystemExit(1) # If the program exits, the service will just automatically restart anyway
 
 thread = threading.Thread(target=run)
 
