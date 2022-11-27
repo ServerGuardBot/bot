@@ -106,9 +106,13 @@ class VerifyUser(MethodView):
             try:
                 post_data = decoder.decode(unpad(cipher.decrypt(enc), 16).decode('utf-8'))
             except Exception as e:
-                return 'Bad request', 403
+                return jsonify({
+                    'message': 'Bad request.'
+                }), 403
         else:
-            post_data = request.get_json()
+            return jsonify({
+                'message': 'Your client is using an outdated version of the verification page, please Press Control + Shift + R and try verifying again.'
+            }), 403
         browser_id = post_data.get('bi') or request.cookies.get('a')
         using_vpn = (post_data.get('v') or request.cookies.get('b')) != '0'
 
