@@ -25,6 +25,7 @@ numpy = "*"
 sklearn = "*"
 python-levenshtein = "*"
 better-profanity = "*"
+pycryptodome = "*"
 
 [dev-packages]
 

@@ -317,7 +317,7 @@ class GeneralModule(Module):
                 link_match = re.search(r'\[(.*?)\]\((.*?)\)', account)
                 if link_match:
                     result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/admin_contact', json={
-                        'value': link_match.lastgroup
+                        'value': link_match.groups()[1]
                     }, headers={
                         'authorization': bot_config.SECRET_KEY
                     })

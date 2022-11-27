@@ -30,6 +30,7 @@ class BaseConfig:
     DB_PASS = os.getenv('DB_PASS', 'is_this_db_pass')
     DB_USER = os.getenv('DB_USER', 'origin')
     DB_HOST = os.getenv('DB_HOST', 'localhost')
+    SITE_ENCRYPTION = os.getenv('SITE_ENCRYPTION', 'idk')
     DEBUG = False
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024 # 10MB

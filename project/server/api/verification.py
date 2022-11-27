@@ -4,9 +4,10 @@ import string
 import jwt
 import aiohttp
 import requests
+import base64
 
 from datetime import datetime
-from json import JSONEncoder
+from json import JSONDecoder, JSONEncoder
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
 from project import app, bot_api, db, get_shared_state
@@ -16,6 +17,8 @@ from project.helpers.images import *
 from project.helpers.premium import get_user_premium_status
 from project.helpers.verify_browseragent import verify_browseragent
 from project.server.models import Guild, GuildUser
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
 
 from guilded import Embed
 
@@ -24,6 +27,8 @@ shared_ip_cache, shared_ip_lock = get_shared_state(port=35793, key=b"verificatio
 
 encoder = JSONEncoder()
 verification_blueprint = Blueprint('verification', __name__)
+
+decoder = JSONDecoder()
 
 verify_cache = Cache(60 * 10, shared_dict)
 ip_cache = Cache(300, shared_ip_cache)
@@ -52,7 +57,9 @@ class VerifyUser(MethodView):
     async def get(self, t):
         t = verify_cache.get(t)
         if t == None:
-            return 'Bad request', 403
+            return jsonify({
+                    'message': 'Bad request.'
+                }), 403
         
         bot_api.session = aiohttp.ClientSession()
 
@@ -88,9 +95,20 @@ class VerifyUser(MethodView):
         link = t
         t = verify_cache.get(t)
         if t == None:
-            return 'Bad request', 403
+            return jsonify({
+                    'message': 'Bad request.'
+                }), 403
         verify_cache.remove(link)
-        post_data = request.get_json()
+        if request.content_type == 'text/plain':
+            body = request.get_data(as_text=True)
+            enc = base64.b64decode(body)
+            cipher = AES.new(app.config.get('SITE_ENCRYPTION', 'idk').encode('utf-8'), AES.MODE_ECB)
+            try:
+                post_data = decoder.decode(unpad(cipher.decrypt(enc), 16).decode('utf-8'))
+            except Exception as e:
+                return 'Bad request', 403
+        else:
+            post_data = request.get_json()
         browser_id = post_data.get('bi') or request.cookies.get('a')
         using_vpn = (post_data.get('v') or request.cookies.get('b')) != '0'
 
