@@ -384,7 +384,8 @@ class ModerationModule(Module):
                     description=f'Information about the user {user.mention}. {user.nick is not None and f"They have the nickname {user.nick}" or "They do not have a nickname."}',
                     colour=Colour.gilded(),
                     url=user.profile_url
-                )
+                ) \
+                .set_thumbnail(url=user.avatar.aws_url)
                 em.add_field(name='Roles', value=', '.join([f'<@{role}>' for role in role_ids]), inline=False)
                 em.add_field(name='Account created', value=user.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
                 em.add_field(name='Joined at', value=user.joined_at.strftime("%b %d %Y at %H:%M %p %Z"))

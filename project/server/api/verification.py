@@ -333,14 +333,16 @@ class VerifyUser(MethodView):
             # Compare their socials against database of banned users in this guild that aren't the user being verified
             socials = decoder.decode(user_info.connections)
             if socials.get('roblox') or socials.get('twitter') or socials.get('youtube') or socials.get('steam'):
-                matching_socials = db.session.query(GuildUser, UserInfo) \
-                    .filter(GuildUser.is_banned == True) \
+                banned_users = db.session.query(GuildUser.user_id) \
                     .filter(GuildUser.guild_id == token.guild_id) \
-                    .filter(UserInfo.user_id != token.user_id) \
-                    .join(UserInfo, ((UserInfo.roblox == user_info.roblox) | (UserInfo.twitter == user_info.twitter) | (UserInfo.youtube == user_info.youtube) | (UserInfo.steam == user_info.steam))) \
-                    .first()
+                    .filter(GuildUser.user_id != token.user_id) \
+                    .filter(GuildUser.is_banned == True)
 
-                if matching_socials is not None:
+                matching_socials = db.session.query(UserInfo) \
+                    .filter((UserInfo.roblox == user_info.roblox) | (UserInfo.twitter == user_info.twitter) | (UserInfo.youtube == user_info.youtube) | (UserInfo.steam == user_info.steam)) \
+                    .filter(UserInfo.user_id.in_(banned_users))
+
+                if len(matching_socials.all()) > 0:
                     if logs_channel is not None:
                         await send_embed(logs_channel, embed=user_evaluator.generate_embed(
                             await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
