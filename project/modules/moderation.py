@@ -9,13 +9,13 @@ from guilded.ext import commands
 from guilded import Embed, Colour, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
 from humanfriendly import parse_timespan, format_timespan
 from better_profanity import Profanity
+from unidecode import unidecode
 
 import os
 import requests
 import aiohttp
 import joblib
 import numpy as np
-import unicodedata
 
 user_converter = commands.UserConverter()
 
@@ -45,7 +45,7 @@ def _get_prob(prob):
 def apply_filter(filter: str, texts: list):
     new_texts = []
     for text in texts:
-        new_texts.append(unicodedata.normalize('NFKD', text).encode('ascii', 'ignore'))
+        new_texts.append(unidecode(text))
     if not filters.get(filter):
         raise Exception('Filter not found')
     f = filters[filter]

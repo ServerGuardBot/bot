@@ -26,6 +26,9 @@ sklearn = "*"
 python-levenshtein = "*"
 better-profanity = "*"
 pycryptodome = "*"
+protobuf = "<=3.20"
+tensorflow = "*"
+unidecode = "*"
 
 [dev-packages]
 

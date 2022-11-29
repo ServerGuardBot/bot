@@ -6,7 +6,7 @@ import aiohttp
 import requests
 import base64
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from json import JSONDecoder, JSONEncoder
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
@@ -16,11 +16,11 @@ from project.helpers.Cache import Cache
 from project.helpers.images import *
 from project.helpers.premium import get_user_premium_status
 from project.helpers.verify_browseragent import verify_browseragent
-from project.server.models import Guild, GuildUser
+from project.server.models import Guild, GuildUser, UserInfo
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 
-from guilded import Embed
+from guilded import Embed, SocialLinkType, http
 
 shared_dict, shared_lock = get_shared_state(port=35792, key=b"verification")
 shared_ip_cache, shared_ip_lock = get_shared_state(port=35793, key=b"verification_ip")
@@ -51,6 +51,97 @@ async def send_embed(channel_id, embed: Embed):
     return await bot_api.create_channel_message(channel_id, payload={
         'embeds': [embed.to_dict()]
     })
+
+async def get_user_info(guild_id: str, user_id: str):
+    user: UserInfo = UserInfo.query.filter(UserInfo.user_id == user_id).first()
+    update_user = False
+
+    if user is None:
+        update_user = True
+    else:
+        if datetime.now() > user.last_updated + timedelta(days=1):
+            update_user = True
+            user.last_updated = datetime.now()
+    
+    if update_user:
+        connections = {}
+
+        try:
+            profile: dict = await bot_api.request(http.Route('GET', f'/users/{user_id}/profilev3', override_base=http.Route.USER_BASE))
+            for t in profile.get('socialLinks'):
+                connections[t['type']] = {
+                    'handle': t['handle'],
+                    'serviceId': t['serviceId']
+                }
+        except:
+            # Fallback to Bot API method if the other method don't work
+            for t in SocialLinkType:
+                if connections.get(t.value): # Skip any aliases that were already handled
+                    pass
+                try:
+                    link: dict = (await bot_api.get_member_social_links(guild_id, user_id, t.value))['socialLink']
+                    connections[t.value] = {
+                        'handle': link.get('handle'),
+                        'serviceId': link.get('service_id', link.get('serviceId'))
+                    }
+                except Exception as e:
+                    pass # Silently error
+        
+        guild_user: dict = (await bot_api.get_user(user_id)).get('user')
+
+        try:
+            guilds: list = (await bot_api.request(http.Route('GET', f'/users/{user_id}/teams', override_base=http.Route.USER_BASE))).get('teams', [])
+        except:
+            # Fallback to an empty dict if not possible, or to None if we are updating
+            if user is None:
+                guilds: list = {}
+            else:
+                guilds = None
+
+        premium = await get_user_premium_status(user_id)
+
+        if user is None:
+            user = UserInfo(user_id, guild_user, connections, guilds, premium)
+        else:
+            UserInfo.update_user_data(user, guild_user)
+            UserInfo.update_connections(user, connections)
+            if guilds is not None:
+                UserInfo.update_guilds(user, guilds)
+            user.premium = str(premium)
+        db.session.add(user)
+        db.session.commit()
+    return user
+
+class UserInfoResource(MethodView):
+    """ User Info Resource """
+    async def get(self, guild_id, user_id):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        
+        bot_api.session = aiohttp.ClientSession()
+
+        user_info: UserInfo = await get_user_info(guild_id, user_id)
+
+        await bot_api.session.close()
+
+        return jsonify({
+            'id': user_info.user_id,
+            'name': user_info.name,
+            'avatar': user_info.avatar,
+            'guilded_data': user_info.guilded_data,
+            'created_at': user_info.created_at,
+            'connections': encoder.encode(user_info.connections or {}),
+            
+            'roblox': user_info.roblox,
+            'steam': user_info.steam,
+            'youtube': user_info.youtube,
+            'twitter': user_info.twitter,
+
+            'guilds': encoder.encode(user_info.guilds),
+            'premium': int(user_info.premium)
+        }), 200
 
 class VerifyUser(MethodView):
     """ User Verification Resource """
@@ -156,12 +247,14 @@ class VerifyUser(MethodView):
                 if cur_bid != browser_id or cur_vpn != using_vpn or cur_ip != hashed_ip or cur_con != user.connections:
                     db.session.add(user)
                     db.session.commit()
+            
+            user_info: UserInfo = await get_user_info(token.guild_id, token.user_id)
 
             if user.bypass_verification:
                 # Bot-related process
                 if logs_channel is not None:
                     await send_embed(logs_channel, user_evaluator.generate_embed(
-                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
                         True
                     ))
                 if verified_role is not None:
@@ -185,7 +278,7 @@ class VerifyUser(MethodView):
                 # Possibly not a browser, reject it
                 if logs_channel is not None:
                     await send_embed(logs_channel, embed=user_evaluator.generate_embed(
-                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
                         False
                     ))
                 return jsonify({
@@ -209,7 +302,7 @@ class VerifyUser(MethodView):
                 # Reject due to too many verification requests
                 if logs_channel is not None:
                     await send_embed(logs_channel, embed=user_evaluator.generate_embed(
-                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
                         False
                     ))
                 return jsonify({
@@ -230,12 +323,31 @@ class VerifyUser(MethodView):
                         # Block the verification
                         if logs_channel is not None:
                             await send_embed(logs_channel, embed=user_evaluator.generate_embed(
-                                await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                                await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
                                 False
                             ))
                         return jsonify({
                             'message': 'Dangerous IP address identified by Advanced Proxy Check'
                         }), 403
+            
+            # Compare their socials against database of banned users in this guild that aren't the user being verified
+            socials = decoder.decode(user_info.connections)
+            if socials.get('roblox') or socials.get('twitter') or socials.get('youtube') or socials.get('steam'):
+                matching_socials = db.session.query(GuildUser, UserInfo) \
+                    .join(UserInfo, (UserInfo.roblox == user_info.roblox) | (UserInfo.twitter == user_info.twitter) | (UserInfo.youtube == user_info.youtube) | (UserInfo.steam == user_info.steam)) \
+                    .filter(UserInfo.user_id != token.user_id) \
+                    .filter(GuildUser.is_banned == True) \
+                    .first()
+
+                if matching_socials is not None:
+                    if logs_channel is not None:
+                        await send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                            await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
+                            False
+                        ))
+                    return jsonify({
+                        'message': 'Your account is linked to a previously banned member of this server'
+                    }), 403
 
             # Compare IP hash against database of banned users in this guild that aren't the user being verified
             matching_hashes = db.session.query(GuildUser).filter(
@@ -269,7 +381,7 @@ class VerifyUser(MethodView):
                 if len(matching_bids) > 0: # We found another user who was banned with a matching browser id, reject them
                     if logs_channel is not None:
                         await send_embed(logs_channel, embed=user_evaluator.generate_embed(
-                            await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                            await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
                             False
                         ))
                     return jsonify({
@@ -279,7 +391,7 @@ class VerifyUser(MethodView):
             # Bot-related process
             if logs_channel is not None:
                 await send_embed(logs_channel, embed=user_evaluator.generate_embed(
-                    await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                    await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
                     True
                 ))
             if verified_role is not None:
@@ -577,6 +689,7 @@ class VerifySetUserBanned(MethodView):
 
         return jsonify({'message': 'Success'}), 200
 
+verification_blueprint.add_url_rule('/userinfo/<guild_id>/<user_id>', view_func=UserInfoResource.as_view('userinfo_guildscope'))
 verification_blueprint.add_url_rule('/verify/<t>', view_func=VerifyUser.as_view('verify'))
 verification_blueprint.add_url_rule('/getguilduser/<guild_id>/<user_id>', view_func=GetGuildUser.as_view('getguilduser'))
 verification_blueprint.add_url_rule('/verify/shorten', view_func=ShortVerifyLink.as_view('shorten_verify_link'))

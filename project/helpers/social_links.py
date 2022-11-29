@@ -1,5 +1,4 @@
-from guilded import Member, SocialLink, SocialLinkType
-from project import client
+from project import bot_config
 from project.helpers.Cache import Cache
 
 import requests
@@ -11,32 +10,12 @@ async def get_connections(guild_id: str, user_id: str):
     if cached:
         return cached
 
-    profile_req = requests.get(f'https://www.guilded.gg/api/users/{user_id}/profilev3')
+    user_info_req = requests.get(f'http://localhost:5000/userinfo/{guild_id}/{user_id}', headers={
+        'authorization': bot_config.SECRET_KEY
+    })
+    user_info = user_info_req.json()
 
-    connections = {}
-
-    if profile_req.status_code == 200:
-        profile: dict = profile_req.json()
-        for t in profile.get('socialLinks'):
-            connections[t['type']] = {
-                'handle': t['handle'],
-                'serviceId': t['serviceId']
-            }
-    else:
-        # Fallback to Bot API method if the other method don't work
-        user: Member = await client.get_server(guild_id).fetch_member(user_id)
-        for t in SocialLinkType:
-            if connections.get(t.value): # Skip any aliases that were already handled
-                pass
-            try:
-                link: SocialLink = await user.fetch_social_link(t)
-                connections[t.value] = {
-                    'handle': link.handle,
-                    'service_id': link.service_id
-                }
-            except Exception:
-                pass # Silently error
-        
-        connection_cache.set(user_id, connections)
+    connections = user_info.get('connections')
+    connection_cache.set(user_id, connections)
 
     return connections

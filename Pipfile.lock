@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "24c857155179d7823ed94f0a7596afc5063a909324748cda8e0337149228472d"
+            "sha256": "bf7bd5f340fb927b7bd83abf960e046097c3eb9e58822a8f35e518614022d34b"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -1130,7 +1130,7 @@
                 "sha256:c0ccd3f940fe7f3b35a261b1dd1b4fc850c8fde9f74207015431f174be5976b3",
                 "sha256:d0b635cefebd7a8a0f92020562dead912f81f401af7e71f16bf9506ff3bdbb38"
             ],
-            "markers": "python_version >= '3.5'",
+            "index": "pypi",
             "version": "==3.19.6"
         },
         "pyasn1": {
@@ -1493,7 +1493,7 @@
                 "sha256:d973458241c8771bf95d4ba68ad5d67b094f72dd181c2d562ffab538c1b0dad7",
                 "sha256:d9cf25bca641f2e5c77caa3bfd8dd6b892a7aec0695c54d2a7c9f52a54a8d487"
             ],
-            "markers": "python_version >= '3.7'",
+            "index": "pypi",
             "version": "==2.11.0"
         },
         "tensorflow-estimator": {
@@ -1545,6 +1545,14 @@
             ],
             "markers": "python_version >= '3.7'",
             "version": "==4.4.0"
+        },
+        "unidecode": {
+            "hashes": [
+                "sha256:547d7c479e4f377b430dd91ac1275d593308dce0fc464fb2ab7d41f82ec653be",
+                "sha256:fed09cf0be8cf415b391642c2a5addfc72194407caee4f98719e40ec2a72b830"
+            ],
+            "index": "pypi",
+            "version": "==1.3.6"
         },
         "urllib3": {
             "hashes": [
