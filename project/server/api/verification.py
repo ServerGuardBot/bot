@@ -334,9 +334,10 @@ class VerifyUser(MethodView):
             socials = decoder.decode(user_info.connections)
             if socials.get('roblox') or socials.get('twitter') or socials.get('youtube') or socials.get('steam'):
                 matching_socials = db.session.query(GuildUser, UserInfo) \
-                    .join(UserInfo, (UserInfo.roblox == user_info.roblox) | (UserInfo.twitter == user_info.twitter) | (UserInfo.youtube == user_info.youtube) | (UserInfo.steam == user_info.steam)) \
-                    .filter(UserInfo.user_id != token.user_id) \
                     .filter(GuildUser.is_banned == True) \
+                    .filter(GuildUser.guild_id == token.guild_id) \
+                    .filter(UserInfo.user_id != token.user_id) \
+                    .join(UserInfo, ((UserInfo.roblox == user_info.roblox) | (UserInfo.twitter == user_info.twitter) | (UserInfo.youtube == user_info.youtube) | (UserInfo.steam == user_info.steam))) \
                     .first()
 
                 if matching_socials is not None:
