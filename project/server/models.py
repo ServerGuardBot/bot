@@ -171,7 +171,7 @@ class UserInfo(db.Model):
     @staticmethod
     def update_user_data(self, guilded_data: dict):
         self.name = guilded_data.get('name', '')
-        self.avatar = guilded_data.get('profilePictureLg', IMAGE_DEFAULT_AVATAR)
+        self.avatar = guilded_data.get('profilePictureLg', IMAGE_DEFAULT_AVATAR) or IMAGE_DEFAULT_AVATAR
         self.guilded_data = JSONEncoder().encode(guilded_data)
     
     @staticmethod
