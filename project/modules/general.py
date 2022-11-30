@@ -1,4 +1,3 @@
-import asyncio
 import re
 from project.modules.base import Module
 from project.modules.moderation import reset_filter_cache
@@ -7,7 +6,7 @@ from project.helpers.Cache import Cache
 from project import bot_config
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
-from guilded import Embed, BulkMemberRolesUpdateEvent, BotAddEvent, ChatMessage, http
+from guilded import Embed, BulkMemberRolesUpdateEvent, BotAddEvent, BotRemoveEvent, ChatMessage, http
 from datetime import datetime
 from humanfriendly import format_timespan
 
@@ -240,12 +239,21 @@ class GeneralModule(Module):
             """Bot creator-only command that displays bot analytics"""
             if ctx.author.id == 'm6YxwpQd':
                 uptime = abs(datetime.now().timestamp() - start_time)
+
+                result_server_count = requests.get(f'http://localhost:5000/analytics/servers', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                result_largest_servers = requests.get(f'http://localhost:5000/analytics/servers/largest', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
                 await ctx.reply(embed=Embed(
                     title='Bot Analytics',
                     colour=Colour.gilded(),
                 )\
-                .add_field(name='Server Count', value=str(len(bot.servers)))\
-                .add_field(name='Uptime', value=format_timespan(uptime))\
+                .add_field(name='Server Count', value=str(result_server_count.json().get('value', 1))) \
+                .add_field(name='Uptime', value=format_timespan(uptime)) \
+                .add_field(name='Largest Servers', value='\n'.join([f'{server.get("members")} Members, {server.get("name")}' for server in result_largest_servers.json()])) \
                 .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80'))
 
         analytics.cog = cog
@@ -1055,6 +1063,14 @@ class GeneralModule(Module):
                     xp_cache.set(id, True)
                     await member.award_xp(gain)
         self.bot.message_listeners.append(on_message)
+
+        @bot.event
+        async def on_bot_remove(event: BotRemoveEvent):
+            result = requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
+                'active': False
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
         
         @bot.event
         async def on_bot_add(event: BotAddEvent):
@@ -1070,3 +1086,9 @@ class GeneralModule(Module):
             .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
             .add_field(name='Links', value='[Support Server](https://www.guilded.gg/server-guard) • [Invite](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e)', inline=False)
             await default.send(embed=em)
+
+            result = requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
+                'active': True
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })

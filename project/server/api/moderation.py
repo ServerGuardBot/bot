@@ -44,7 +44,8 @@ class UserWarnings(MethodView):
                 'result': [{
                     'reason': warn.value['reason'],
                     'issuer': warn.value['issuer'],
-                    'id': get_warning_id(guild_id, user_id, warn.internal_id)
+                    'id': get_warning_id(guild_id, user_id, warn.internal_id),
+                    'when': warn.created_at is not None and warn.created_at.timestamp() or None
                 } for warn in warnings]
             }), 200
     def patch(self, guild_id, user_id, warn_id):

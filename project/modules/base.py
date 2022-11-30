@@ -6,7 +6,6 @@ from project.helpers.Cache import Cache
 from project.helpers.embeds import *
 
 import requests
-import aiohttp
 import re
 
 guild_data_cache = Cache(60)
@@ -27,6 +26,19 @@ class Module:
 
         self.bot_api = http.HTTPClient()
         self.bot_api.token = os.getenv('BOT_KEY')
+    
+    async def _update_guild_data(self, guild_id: str):
+        from project import bot_config
+        server = await self.bot.getch_server(guild_id)
+
+        guild_data_req = requests.patch(f'http://localhost:5000/guilddata/{guild_id}', headers={
+            'authorization': bot_config.SECRET_KEY
+        }, json={
+            'name': server.name,
+            'bio': server.about,
+            'avatar': server.avatar is not None and server.avatar.aws_url or IMAGE_DEFAULT_AVATAR,
+            'members': server.member_count
+        })
 
     def get_guild_data(self, guild_id: str):
         from project import bot_config

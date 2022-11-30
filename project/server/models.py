@@ -5,7 +5,55 @@ from project import db
 from project.helpers.images import *
 from datetime import datetime
 from sqlalchemy_json import NestedMutableJson
-from sqlalchemy.sql import func
+
+class BotData(db.Model):
+    """ Bot Data model for storing persistent bot information """
+    __tablename__ = 'botdata'
+
+    key = db.Column(db.String(500), primary_key=True)
+    value = db.Column(db.String(500), nullable=False, server_default="")
+
+    def __init__(self, key: str, value: str):
+        self.key = str(key)
+        self.value = str(value)
+    
+    def __repr__(self):
+        return f'<BotData {self.key}={self.value}>'
+
+class AnalyticsItem(db.Model):
+    """ Analytics Item model for storing analytics data """
+    __tablename__ = 'analytics'
+
+    id = db.Column(db.String(500), primary_key=True)
+    guild_id = db.Column(db.String(500), nullable=False)
+    key = db.Column(db.String(500), nullable=False)
+    date = db.Column(db.DateTime, nullable=False)
+    value = db.Column(db.Float, nullable=False, server_default="0")
+
+    @staticmethod
+    def get_date(round_to: str='minute'):
+        date = datetime.now()
+
+        if round_to == 'day':
+            date = datetime(year=date.year, month=date.month, day=date.day)
+        elif round_to == 'hour':
+            date = datetime(year=date.year, month=date.month, day=date.day, hour=date.hour)
+        elif round_to == 'minute':
+            date = datetime(year=date.year, month=date.month, day=date.day, hour=date.hour, minute=date.minute)
+        else:
+            raise Exception('round_to must either be "minute", "day", or "hour"')
+
+        return date
+
+    def __init__(self, guild_id: str, key: str, value: str, date: datetime=None):
+        self.id = f'{guild_id}/{key}/{date.timestamp()}'
+        self.guild_id = guild_id
+        self.key = key
+        self.value = value
+        self.date = date or datetime.now()
+    
+    def __repr__(self):
+        return f'<AnalyticsItem guild={self.guild_id} key={self.key} value={self.value} date={self.date.timestamp()}>'
 
 class Guild(db.Model):
     """ Guild model for storing guild data """
@@ -14,6 +62,12 @@ class Guild(db.Model):
     guild_id = db.Column(db.String(500), primary_key=True)
     premium = db.Column(db.String(500), nullable=True)
     config = db.Column(NestedMutableJson)
+    active = db.Column(db.Boolean, nullable=False, server_default="1")
+
+    name = db.Column(db.String(500), nullable=True)
+    bio = db.Column(db.String(500), nullable=True)
+    avatar = db.Column(db.String(500), nullable=True)
+    members = db.Column(db.Integer, nullable=False, server_default="0")
 
     def __init__(self, guild_id: str):
         self.guild_id = guild_id
@@ -36,8 +90,9 @@ class GuildUser(db.Model):
     using_vpn = db.Column(db.Boolean, default=False)
     bypass_verification = db.Column(db.Boolean, default=False)
     connections = db.Column(db.String(500), nullable=True)
+    permission_level = db.Column(db.Integer, nullable=False, server_default="0")
 
-    def __init__(self, guild_id: str, user_id: str, hashed_ip: str=None, browser_id: str=None, using_vpn: bool=False, connections: str=None):
+    def __init__(self, guild_id: str, user_id: str, hashed_ip: str=None, browser_id: str=None, using_vpn: bool=False, connections: str=None, permission_level: int=0):
         self.internal_id = f'{guild_id}/{user_id}'
         self.guild_id = guild_id
         self.user_id = user_id
@@ -45,6 +100,7 @@ class GuildUser(db.Model):
         self.browser_id = browser_id
         self.using_vpn = using_vpn
         self.connections = connections
+        self.permission_level = permission_level
     
     def __repr__(self):
         return f'<GuildUser {self.internal_id}>'
@@ -93,7 +149,7 @@ class UserInfo(db.Model):
     twitter = db.Column(db.String(500), nullable=True)
 
     guilds = db.Column(db.String(500), nullable=False)
-    premium = db.Column(db.String(500), nullable=False, default="0")
+    premium = db.Column(db.String(500), nullable=False, server_default="0")
 
     @staticmethod
     def update_connections(self, data: dict):

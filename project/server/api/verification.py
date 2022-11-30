@@ -6,7 +6,7 @@ import aiohttp
 import requests
 import base64
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from json import JSONDecoder, JSONEncoder
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
@@ -17,10 +17,11 @@ from project.helpers.images import *
 from project.helpers.premium import get_user_premium_status
 from project.helpers.verify_browseragent import verify_browseragent
 from project.server.models import Guild, GuildUser, UserInfo
+from project.server.api.guilds import get_user_info
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 
-from guilded import Embed, SocialLinkType, http
+from guilded import Embed
 
 shared_dict, shared_lock = get_shared_state(port=35792, key=b"verification")
 shared_ip_cache, shared_ip_lock = get_shared_state(port=35793, key=b"verification_ip")
@@ -51,97 +52,6 @@ async def send_embed(channel_id, embed: Embed):
     return await bot_api.create_channel_message(channel_id, payload={
         'embeds': [embed.to_dict()]
     })
-
-async def get_user_info(guild_id: str, user_id: str):
-    user: UserInfo = UserInfo.query.filter(UserInfo.user_id == user_id).first()
-    update_user = False
-
-    if user is None:
-        update_user = True
-    else:
-        if datetime.now() > user.last_updated + timedelta(days=1):
-            update_user = True
-            user.last_updated = datetime.now()
-    
-    if update_user:
-        connections = {}
-
-        try:
-            profile: dict = await bot_api.request(http.Route('GET', f'/users/{user_id}/profilev3', override_base=http.Route.USER_BASE))
-            for t in profile.get('socialLinks'):
-                connections[t['type']] = {
-                    'handle': t['handle'],
-                    'serviceId': t['serviceId']
-                }
-        except:
-            # Fallback to Bot API method if the other method don't work
-            for t in SocialLinkType:
-                if connections.get(t.value): # Skip any aliases that were already handled
-                    pass
-                try:
-                    link: dict = (await bot_api.get_member_social_links(guild_id, user_id, t.value))['socialLink']
-                    connections[t.value] = {
-                        'handle': link.get('handle'),
-                        'serviceId': link.get('service_id', link.get('serviceId'))
-                    }
-                except Exception as e:
-                    pass # Silently error
-        
-        guild_user: dict = (await bot_api.get_user(user_id)).get('user')
-
-        try:
-            guilds: list = (await bot_api.request(http.Route('GET', f'/users/{user_id}/teams', override_base=http.Route.USER_BASE))).get('teams', [])
-        except:
-            # Fallback to an empty dict if not possible, or to None if we are updating
-            if user is None:
-                guilds: list = {}
-            else:
-                guilds = None
-
-        premium = await get_user_premium_status(user_id)
-
-        if user is None:
-            user = UserInfo(user_id, guild_user, connections, guilds, premium)
-        else:
-            UserInfo.update_user_data(user, guild_user)
-            UserInfo.update_connections(user, connections)
-            if guilds is not None:
-                UserInfo.update_guilds(user, guilds)
-            user.premium = str(premium)
-        db.session.add(user)
-        db.session.commit()
-    return user
-
-class UserInfoResource(MethodView):
-    """ User Info Resource """
-    async def get(self, guild_id, user_id):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        bot_api.session = aiohttp.ClientSession()
-
-        user_info: UserInfo = await get_user_info(guild_id, user_id)
-
-        await bot_api.session.close()
-
-        return jsonify({
-            'id': user_info.user_id,
-            'name': user_info.name,
-            'avatar': user_info.avatar,
-            'guilded_data': user_info.guilded_data,
-            'created_at': user_info.created_at,
-            'connections': encoder.encode(user_info.connections or {}),
-            
-            'roblox': user_info.roblox,
-            'steam': user_info.steam,
-            'youtube': user_info.youtube,
-            'twitter': user_info.twitter,
-
-            'guilds': encoder.encode(user_info.guilds),
-            'premium': int(user_info.premium)
-        }), 200
 
 class VerifyUser(MethodView):
     """ User Verification Resource """
@@ -424,92 +334,6 @@ class VerifyUser(MethodView):
                 'message': 'Invalid verification code, please generate one using /verify'
             }), 400
 
-class GetGuildUser(MethodView):
-    def get(self, guild_id, user_id):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        db_user: GuildUser = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
-
-        if db_user:
-            return jsonify({
-                'guild_id': db_user.guild_id,
-                'user_id': db_user.user_id,
-                'browser_id': db_user.browser_id,
-                'hashed_ip': db_user.hashed_ip,
-                'is_banned': db_user.is_banned,
-                'using_vpn': db_user.using_vpn,
-                'bypass_verification': db_user.bypass_verification,
-                'connections': db_user.connections
-            }), 200
-        else:
-            return 'Not found', 404
-
-class GuildData(MethodView):
-    def get(self, guild_id):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
-
-        if guild:
-            return jsonify({
-                'guild_id': guild.guild_id,
-                'premium': guild.premium,
-                'config': guild.config
-            }), 200
-        else:
-            guild = Guild(guild_id)
-
-            db.session.add(guild)
-            db.session.commit()
-
-            return jsonify({
-                'guild_id': guild.guild_id,
-                'premium': guild.premium,
-                'config': guild.config
-            }), 201
-    def patch(self, guild_id):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        post_data: dict = request.get_json()
-        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
-
-        if guild == None:
-            guild = Guild(guild_id)
-        
-        for key in post_data.keys():
-            try:
-                guild[key] = post_data.get(key)
-            except Exception:
-                print(f'[WARNING]: "{key}" is not a valid member of the Guild model!')
-                # Make sure that a failure doesn't lead to a 500 error and notifies the logs
-
-        db.session.add(guild)
-        db.session.commit()
-
-        return jsonify(guild), 200
-    def delete(self, guild_id):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
-
-        if guild:
-            db.session.delete(guild)
-            db.session.commit()
-
-            return jsonify({'message': 'Deleted', 'original_guild': jsonify(guild)}), 204
-
 class ShortVerifyLink(MethodView):
     def post(self):
         auth = request.headers.get('authorization')
@@ -524,130 +348,6 @@ class ShortVerifyLink(MethodView):
         verify_cache.set(link, token)
 
         return jsonify({'result': link}), 201
-
-class GuildConfig(MethodView):
-    def get(self, guild_id, item):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
-
-        if guild == None:
-            guild = Guild(guild_id)
-            guild.config = {}
-
-            db.session.add(guild)
-            db.session.commit()
-        
-        if guild.config == None:
-            guild.config = {}
-
-            db.session.add(guild)
-            db.session.commit()
-        
-        value = guild.config.get(item)
-        return jsonify({'result': value}), value == None and 404 or 200
-    def post(self, guild_id, item):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
-
-        if guild == None:
-            guild = Guild(guild_id)
-        
-        post_data: dict = request.get_json()
-        value = post_data.get('value')
-
-        curr: list = guild.config.get(item)
-        
-        if curr == None:
-            curr = []
-            guild.config[item] = curr
-        exists = False
-        jval = encoder.encode(value)
-        for i in curr:
-            if type(value) is dict:
-                if encoder.encode(i) == jval:
-                    exists = True
-                    break
-            else:
-                if i == value:
-                    exists = True
-                    break
-        if exists:
-            return jsonify({'message': 'Value already exists in key'}), 400
-        else:
-            curr.append(value)
-
-        guild.config[item] = curr
-
-        db.session.add(guild)
-        db.session.commit()
-        return jsonify({'message': 'Value added'}), 201
-    def delete(self, guild_id, item):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
-
-        if guild == None:
-            guild = Guild(guild_id)
-        
-        post_data: dict = request.get_json()
-        value = post_data.get('value')
-
-        curr: list = guild.config.get(item)
-        
-        if curr == None:
-            curr = []
-            guild.config[item] = curr
-        removed = False
-        jval = encoder.encode(value)
-        for i in curr:
-            if type(value) is dict:
-                if encoder.encode(i) == jval:
-                    removed = True
-                    curr.remove(i)
-                    break
-            else:
-                if i == value:
-                    removed = True
-                    curr.remove(i)
-                    break
-        if not removed:
-            return jsonify({'message': 'Not found'}), 404
-
-        guild.config[item] = curr
-
-        db.session.add(guild)
-        db.session.commit()
-        return jsonify({'message': 'Value removed'}), 204
-    def patch(self, guild_id, item):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-        
-        guild: Guild = Guild.query.filter_by(guild_id = guild_id).first()
-
-        if guild == None:
-            guild = Guild(guild_id)
-        
-        post_data: dict = request.get_json()
-        value = post_data.get('value')
-        
-        guild.config[item] = value
-
-        db.session.add(guild)
-        db.session.commit()
-        return jsonify({'message': 'Success'}), 200
 
 class VerifyBypass(MethodView):
     def patch(self, guild_id, user_id):
@@ -692,11 +392,7 @@ class VerifySetUserBanned(MethodView):
 
         return jsonify({'message': 'Success'}), 200
 
-verification_blueprint.add_url_rule('/userinfo/<guild_id>/<user_id>', view_func=UserInfoResource.as_view('userinfo_guildscope'))
 verification_blueprint.add_url_rule('/verify/<t>', view_func=VerifyUser.as_view('verify'))
-verification_blueprint.add_url_rule('/getguilduser/<guild_id>/<user_id>', view_func=GetGuildUser.as_view('getguilduser'))
 verification_blueprint.add_url_rule('/verify/shorten', view_func=ShortVerifyLink.as_view('shorten_verify_link'))
-verification_blueprint.add_url_rule('/guilddata/<guild_id>', view_func=GuildData.as_view('guilddata'))
-verification_blueprint.add_url_rule('/guilddata/<guild_id>/cfg/<item>', view_func=GuildConfig.as_view('guildconfig'))
 verification_blueprint.add_url_rule('/verify/bypass/<guild_id>/<user_id>', view_func=VerifyBypass.as_view('verifybypass'))
 verification_blueprint.add_url_rule('/verify/setbanned/<guild_id>/<user_id>', view_func=VerifySetUserBanned.as_view('verifysetbanned'))

@@ -327,7 +327,7 @@ class ModerationModule(Module):
                 warns = result.json()
                 em = Embed(
                     title = f'Warnings for {user.name}',
-                    description = len(warns) > 0 and ''.join([f'{item["id"]} | <@{item["issuer"]}> - {item["reason"]}\n' for item in warns['result']]) or 'This user has no warnings',
+                    description = len(warns) > 0 and ''.join([f'{item["id"]} | <@{item["issuer"]}> - {item["reason"]}{item.get("when") and " - " + datetime.fromtimestamp(item["when"]).strftime("%b %d %Y at %H:%M %p %Z") or ""}\n' for item in warns['result']]) or 'This user has no warnings',
                     colour = Colour.orange()
                 )
                 await ctx.reply(embed=em)
@@ -417,6 +417,8 @@ class ModerationModule(Module):
         async def on_member_join(event: MemberJoinEvent):
             member = await event.server.getch_member(event.member.id)
 
+            await self._update_guild_data(event.server_id)
+
             bot_api.session = aiohttp.ClientSession()
 
             guild_data_req = requests.get(f'http://localhost:5000/guilddata/{event.server_id}', headers={
@@ -461,6 +463,7 @@ class ModerationModule(Module):
         bot.join_listeners.append(on_member_join)
 
         async def on_member_remove(event: MemberRemoveEvent):
+            await self._update_guild_data(event.server_id)
             if event.banned:
                 return
             member = await bot.getch_user(event.user_id)
@@ -542,6 +545,8 @@ class ModerationModule(Module):
         bot.ban_delete_listeners.append(on_ban_delete)
 
         async def handle_text_message(message):
+            await self._update_guild_data(message.server_id)
+
             guild_data: dict = self.get_guild_data(message.server_id)
             config = guild_data.get('config', {})
             custom_filter = config.get('filters')
@@ -652,15 +657,16 @@ class ModerationModule(Module):
                             })
                             if head_req.status_code == 200:
                                 content_type = head_req.headers.get('content-type')
+                                content_disposition = head_req.get('content-disposition')
                                 blocked = False
-                                if 'image' in content_type:
+                                if 'image' in content_type or re.search(r'.+(.(jpe?g?|jif|jfif?|png|gif|bmp|dib|webp|tiff?|raw|arw|cr2|nrw|k25|heif|heic|indd?|indt|jp2|j2k|jpf|jpx|jpm|mj2|svgz?|ai|eps))', content_disposition):
                                     blocked = True
                                 elif 'html' in content_type:
                                     page_req = requests.get(link, headers={
                                         'user-agent': USER_AGENT
                                     })
                                     if page_req.status_code == 200:
-                                        for url in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:image|"og:image"|og:image))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
+                                        for url in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:image|"og:image"|og:image|'twitter:image'|"twitter:image"|twitter:image|'twitter:image:src'|"twitter:image:src"|twitter:image:src))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
                                             blocked = True
                                             break
                                         for og_type in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:type|"og:type"|og:type))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):

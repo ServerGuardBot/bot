@@ -156,6 +156,13 @@ def load_malicious_url_db():
     except Exception as e:
         print('WARNING: urlhaus API down, malicious URLs not being reloaded.')
 
+async def run_analytics_loop():
+    while True:
+        requests.post('http://localhost:5000/analytics/servers', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+        await asyncio.sleep(60 * 60) # Only runs once an hour
+
 async def run_url_db_dl():
     while True:
         await asyncio.sleep(60 * 10)
@@ -176,6 +183,7 @@ async def on_ready():
     print(f'Logged in as {client.user.name}')
     client.loop.create_task(run_bot_loop())
     client.loop.create_task(run_url_db_dl())
+    client.loop.create_task(run_analytics_loop())
     print('Bot ready')
 
 @client.event
@@ -320,15 +328,22 @@ app.logger.setLevel(gunicorn_logger.level)
 # Register the flask apis
 from project.server.api.verification import verification_blueprint
 from project.server.api.moderation import moderation_blueprint
+from project.server.api.guilds import guilds_blueprint
+from project.server.api.data import data_blueprint
 
 app.register_blueprint(verification_blueprint)
 app.register_blueprint(moderation_blueprint)
+app.register_blueprint(guilds_blueprint)
+app.register_blueprint(data_blueprint)
 
 if app_settings == 'DevelopmentConfig':
     import threading
     def run():
         # Run the bot
-        client.run(app.config.get('GUILDED_BOT_TOKEN'))
+        try:
+            client.run(app.config.get('GUILDED_BOT_TOKEN'))
+        except Exception as e:
+            print(f'Failed to run in dev env: {str(e)}')
     
     thread = threading.Thread(target=run)
 
