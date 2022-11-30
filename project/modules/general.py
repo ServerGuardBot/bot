@@ -246,6 +246,19 @@ class GeneralModule(Module):
                 result_largest_servers = requests.get(f'http://localhost:5000/analytics/servers/largest', headers={
                     'authorization': bot_config.SECRET_KEY
                 })
+                result_unindexed_servers = requests.get(f'http://localhost:5000/analytics/servers/unindexed', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
+                for id in result_unindexed_servers.json():
+                    try:
+                        await self._update_guild_data(id)
+                    except:
+                        result = requests.patch(f'http://localhost:5000/guilddata/{id}', json={
+                            'active': False
+                        }, headers={
+                            'authorization': bot_config.SECRET_KEY
+                        })
 
                 await ctx.reply(embed=Embed(
                     title='Bot Analytics',
@@ -253,7 +266,7 @@ class GeneralModule(Module):
                 )\
                 .add_field(name='Server Count', value=str(result_server_count.json().get('value', 1))) \
                 .add_field(name='Uptime', value=format_timespan(uptime)) \
-                .add_field(name='Largest Servers', value='\n'.join([f'{server.get("members")} Members, {server.get("name")}' for server in result_largest_servers.json()])) \
+                .add_field(name='Largest Servers', value='\n'.join([f'{server.get("members")} Members, {server.get("name")}' for server in result_largest_servers.json()]), inline=False) \
                 .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80'))
 
         analytics.cog = cog

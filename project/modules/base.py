@@ -30,6 +30,7 @@ class Module:
     async def _update_guild_data(self, guild_id: str):
         from project import bot_config
         server = await self.bot.getch_server(guild_id)
+        await server.fill_members()
 
         guild_data_req = requests.patch(f'http://localhost:5000/guilddata/{guild_id}', headers={
             'authorization': bot_config.SECRET_KEY

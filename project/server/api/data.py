@@ -7,6 +7,21 @@ from project.server.models import BotData, AnalyticsItem, Guild
 
 data_blueprint = Blueprint('data', __name__)
 
+class NoneServersResource(MethodView):
+    """ None Servers Resource """
+    async def get(self):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        
+        guilds = db.session.query(Guild) \
+            .filter(Guild.members == 0) \
+            .filter(Guild.active == True) \
+            .all()
+        
+        return jsonify([guild.guild_id for guild in guilds]), 200
+
 class ServerAnalyticsResource(MethodView):
     """ Server Analytics Resource """
     async def get(self, year: int=None, month: int=None, day: int=None, hour: int=None):
@@ -72,6 +87,7 @@ class LargestServersResource(MethodView):
 
         guilds = db.session.query(Guild) \
             .filter(Guild.active == True) \
+            .filter(Guild.members > 0) \
             .order_by(Guild.members.desc()) \
             .limit(10) \
             .all()
@@ -152,6 +168,7 @@ data_blueprint.add_url_rule('/data/<key>', view_func=BotDataResource.as_view('bo
 data_blueprint.add_url_rule('/data/<key>/<value>', view_func=BotDataResource.as_view('botdata'))
 
 data_blueprint.add_url_rule('/analytics/servers/largest', view_func=LargestServersResource.as_view('largest_servers'))
+data_blueprint.add_url_rule('/analytics/servers/unindexed', view_func=NoneServersResource.as_view('none_servers'))
 
 data_blueprint.add_url_rule('/analytics/servers', view_func=ServerAnalyticsResource.as_view('server_analytics'))
 data_blueprint.add_url_rule('/analytics/servers/<year>', view_func=ServerAnalyticsResource.as_view('server_analytics_y'))
