@@ -240,6 +240,11 @@ class GeneralModule(Module):
             if ctx.author.id == 'm6YxwpQd':
                 uptime = abs(datetime.now().timestamp() - start_time)
 
+                # Make sure we have data for the current hour
+                requests.post(f'http://localhost:5000/analytics/servers', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
                 result_server_count = requests.get(f'http://localhost:5000/analytics/servers', headers={
                     'authorization': bot_config.SECRET_KEY
                 })
