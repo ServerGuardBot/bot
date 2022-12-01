@@ -42,6 +42,55 @@ class Module:
             'avatar': server.avatar is not None and server.avatar.aws_url or IMAGE_DEFAULT_AVATAR,
             'members': server.member_count
         })
+    
+    async def get_user_permission_level(self, guild_id: str, user_id: str):
+        from project import bot_config
+
+        user_data_req = requests.get(f'http://localhost:5000/getguilduser/{guild_id}/{user_id}', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+
+        update_data = False
+        if user_data_req.status_code == 200:
+            permission_level = int(user_data_req.json().get('permission_level', 0))
+
+            if permission_level == 0:
+                update_data = True
+        else:
+            update_data = True
+        
+        if update_data:
+            guild = await self.bot.getch_server(guild_id)
+            user = await guild.getch_member(user_id)
+            if user_id == guild.owner.id:
+                permission_level = 4 # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
+            elif await self.user_can_manage_server(user):
+                permission_level = 3
+            else:
+                _lvl = 0
+                role_config_req = requests.get(f'http://localhost:5000/guilddata/{guild_id}/cfg/roles', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                role_config_json: dict = role_config_req.json()
+                if role_config_req.status_code == 200:
+                    role_set: list[dict] = role_config_json['result']
+                    role_ids: list[int] = await user.fetch_role_ids()
+                    for cfg in role_set:
+                        try:
+                            i = role_ids.index(int(cfg.get('id')))
+                            lvl = int(cfg.get('level'))
+                            if lvl + 1 > _lvl:
+                                _lvl = lvl + 1
+                        except Exception as e:
+                            pass
+                permission_level = _lvl
+            user_data_set_req = requests.patch(f'http://localhost:5000/getguilduser/{guild_id}/{user_id}', json={
+                'permission_level': permission_level
+                }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+        return permission_level - 1
+
 
     def get_guild_data(self, guild_id: str):
         from project import bot_config
@@ -170,30 +219,12 @@ class Module:
         return False
 
     async def get_user_premium_status(self, user_id):
-        cached = premium_cache.get(user_id)
-        if cached is not None:
-            return cached
-        try:
-            support_server = await self.bot.getch_server('aE9Zg6Kj')
-            member = await support_server.getch_member(user_id)
-            roles = await member.fetch_role_ids()
-        except Exception:
-            roles = None
+        from project import bot_config
+        user_data_req = requests.get(f'http://localhost:5000/userinfo/aE9Zg6Kj/{user_id}', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
 
-        if roles is None:
-            roles = []
-
-        if 32612283 in roles:
-            cached = 3
-        elif 32612284 in roles:
-            cached = 2
-        elif 32612285 in roles:
-            cached = 1
-        else:
-            cached = 0
-        
-        premium_cache.set(user_id, cached)
-        return cached
+        return int(user_data_req.json().get('premium'))
     
     def reset_user_premium_cache(self, user_id):
         premium_cache.remove(user_id)
@@ -219,6 +250,7 @@ class Module:
         return await guild.getch_member(user.id)
     
     async def is_trusted(self, user: Member):
+        # TODO: Move this into the db so that it does not use unnecessary API calls
         from project import bot_config
         guild = await self.bot.getch_server(user.server.id)
         if user.id == guild.owner.id:
@@ -243,53 +275,14 @@ class Module:
         return False
 
     async def is_moderator(self, user: Member):
-        from project import bot_config
-        guild = await self.bot.getch_server(user.server.id)
-        if user.id == guild.owner.id:
-            return True # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
-        if await self.user_can_manage_server(user):
-            return True
+        permission_level = await self.get_user_permission_level(user.server.id, user.id)
 
-        role_config_req = requests.get(f'http://localhost:5000/guilddata/{user.guild.id}/cfg/roles', headers={
-            'authorization': bot_config.SECRET_KEY
-        })
-        role_config_json: dict = role_config_req.json()
-        if role_config_req.status_code == 200:
-            role_set: list[dict] = role_config_json['result']
-            role_ids: list[int] = await user.fetch_role_ids()
-            for cfg in role_set:
-                try:
-                    i = role_ids.index(int(cfg.get('id')))
-                    return True
-                except Exception as e:
-                    pass
-
-        return False
+        return permission_level > 0
     
     async def is_admin(self, user: Member):
-        from project import bot_config
-        guild = await self.bot.getch_server(user.server.id)
-        if user.id == guild.owner.id:
-            return True # We know the owner of the guild is an admin, bypass any unnecessary calls and checks
-        if await self.user_can_manage_server(user):
-            return True
+        permission_level = await self.get_user_permission_level(user.server.id, user.id)
 
-        role_config_req = requests.get(f'http://localhost:5000/guilddata/{user.guild.id}/cfg/roles', headers={
-            'authorization': bot_config.SECRET_KEY
-        })
-        role_config_json: dict = role_config_req.json()
-        if role_config_req.status_code == 200:
-            role_set: list[dict] = role_config_json['result']
-            role_ids: list[int] = await user.fetch_role_ids()
-            for cfg in role_set:
-                if cfg.get('level') == 1: # 0 = Moderator, 1 = Administrator
-                    try:
-                        i = role_ids.index(int(cfg.get('id')))
-                        return True
-                    except Exception:
-                        pass
-
-        return False
+        return permission_level > 1
     
     def setup_self(self):
         pass

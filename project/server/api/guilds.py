@@ -104,6 +104,30 @@ class UserInfoResource(MethodView):
             'guilds': encoder.encode(user_info.guilds),
             'premium': int(user_info.premium)
         }), 200
+    async def patch(self, guild_id, user_id):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        
+        bot_api.session = aiohttp.ClientSession()
+
+        user_info: UserInfo = await get_user_info(guild_id, user_id)
+
+        await bot_api.session.close()
+
+        post_data = request.get_json()
+
+        for key in post_data.keys():
+            try:
+                setattr(user_info, key, post_data.get(key))
+            except Exception as e:
+                print(f'[WARNING]: "{key}" is not a valid member of the UserInfo model! <{e}>')
+                # Make sure that a failure doesn't lead to a 500 error and notifies the logs
+        db.session.add(user_info)
+        db.session.commit()
+        
+        return 'Success', 200
 
 class GetGuildUser(MethodView):
     def get(self, guild_id, user_id):
@@ -123,10 +147,27 @@ class GetGuildUser(MethodView):
                 'is_banned': db_user.is_banned,
                 'using_vpn': db_user.using_vpn,
                 'bypass_verification': db_user.bypass_verification,
-                'connections': db_user.connections
+                'connections': db_user.connections,
+                'permission_level': db_user.permission_level
             }), 200
         else:
             return 'Not found', 404
+    def patch(self, guild_id, user_id):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        
+        db_user: GuildUser = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
+
+        if db_user:
+            post_data: dict = request.get_json()
+            db_user.permission_level = int(post_data.get('permission_level'))
+        else:
+            db_user = GuildUser(guild_id, user_id, permission_level=int(post_data.get('permission_level')))
+        db.session.add(db_user)
+        db.session.commit()
+        return 'Success', 200
 
 class GuildData(MethodView):
     def get(self, guild_id):

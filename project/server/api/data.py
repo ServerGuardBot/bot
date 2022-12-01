@@ -1,11 +1,34 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
 from project import app, db
 
+from project.server.api.auth import get_user_auth
 from project.server.models import BotData, AnalyticsItem, Guild
 
 data_blueprint = Blueprint('data', __name__)
+
+class AnalyticsDashResource(MethodView):
+    """ Analytics Dash Resource """
+    async def get(self, days=14):
+        auth = get_user_auth()
+
+        if auth != 'm6YxwpQd':
+            return 'Forbidden.', 403
+        
+        dt = AnalyticsItem.get_date(round_to='hour') - timedelta(days=int(days))
+        
+        serverHistorical: list = AnalyticsItem.query.filter(AnalyticsItem.date <= dt) \
+            .filter(AnalyticsItem.key == 'servers') \
+            .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
+            .all()
+        
+        return jsonify({
+            'servers': [{
+                'time': item.date.timestamp(),
+                'value': item.value
+            } for item in serverHistorical]
+        }), 200
 
 class NoneServersResource(MethodView):
     """ None Servers Resource """

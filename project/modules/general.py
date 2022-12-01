@@ -1056,7 +1056,49 @@ class GeneralModule(Module):
         async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
             if event.server_id == 'aE9Zg6Kj':
                 for member in event.after:
-                    self.reset_user_premium_cache(member.id)
+                    roles = member._role_ids
+
+                    if 32612283 in roles:
+                        lvl = 3
+                    elif 32612284 in roles:
+                        lvl = 2
+                    elif 32612285 in roles:
+                        lvl = 1
+                    else:
+                        lvl = 0
+                    user_data_req = requests.patch(f'http://localhost:5000/userinfo/aE9Zg6Kj/{member.id}', json={
+                        'premium': lvl
+                    }, headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+            for member in event.after:
+                if member.id == event.server.owner.id:
+                    permission_level = 4 # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
+                elif await self.user_can_manage_server(member):
+                    permission_level = 3
+                else:
+                    _lvl = 0
+                    role_config_req = requests.get(f'http://localhost:5000/guilddata/{event.server_id}/cfg/roles', headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                    role_config_json: dict = role_config_req.json()
+                    if role_config_req.status_code == 200:
+                        role_set: list[dict] = role_config_json['result']
+                        role_ids: list[int] = member._role_ids
+                        for cfg in role_set:
+                            try:
+                                i = role_ids.index(int(cfg.get('id')))
+                                lvl = int(cfg.get('level'))
+                                if lvl + 1 > _lvl:
+                                    _lvl = lvl + 1
+                            except Exception as e:
+                                pass
+                    permission_level = _lvl
+                user_data_set_req = requests.patch(f'http://localhost:5000/getguilduser/{event.server_id}/{member.id}', json={
+                    'permission_level': permission_level
+                    }, headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
         bot.member_role_update_listeners.append(on_bulk_member_roles_update)
 
         async def on_message(message: ChatMessage):
