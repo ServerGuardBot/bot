@@ -103,7 +103,7 @@ nsfw_thread.start()
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-cors = CORS(app, send_wildcard=True, origins="*")
+cors = CORS(app, send_wildcard=True, origins="https://serverguard.xyz", supports_credentials=True)
 
 guild_cache = Cache()
 
