@@ -160,8 +160,8 @@ class GetGuildUser(MethodView):
         
         db_user: GuildUser = GuildUser.query.filter_by(guild_id = guild_id, user_id = user_id).first()
 
+        post_data: dict = request.get_json()
         if db_user:
-            post_data: dict = request.get_json()
             db_user.permission_level = int(post_data.get('permission_level'))
         else:
             db_user = GuildUser(guild_id, user_id, permission_level=int(post_data.get('permission_level')))
