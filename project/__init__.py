@@ -330,11 +330,13 @@ from project.server.api.verification import verification_blueprint
 from project.server.api.moderation import moderation_blueprint
 from project.server.api.guilds import guilds_blueprint
 from project.server.api.data import data_blueprint
+from project.server.api.auth import auth_blueprint
 
 app.register_blueprint(verification_blueprint)
 app.register_blueprint(moderation_blueprint)
 app.register_blueprint(guilds_blueprint)
 app.register_blueprint(data_blueprint)
+app.register_blueprint(auth_blueprint)
 
 if app_settings == 'DevelopmentConfig':
     import threading

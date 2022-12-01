@@ -14,6 +14,8 @@ import os
 import requests
 import itertools
 
+LOGIN_CHANNEL_ID = '1f6fae7f-6cdf-403d-80b9-623a76f8b621'
+
 member = commands.MemberConverter()
 channel = commands.ChatChannelConverter()
 role = commands.RoleConverter()
@@ -1061,6 +1063,26 @@ class GeneralModule(Module):
             id = f'{message.guild.id}/{message.author.id}'
             if message.author.bot:
                 return
+            if message.channel_id == LOGIN_CHANNEL_ID:
+                # Do login stuff
+                result = requests.post(f'http://localhost:5000/auth/status/{message.content}/{message.author_id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                if result.status_code == 200:
+                    em = Embed(
+                        title='Success',
+                        description='You should now be logged in on your browser. If you closed the login page before this then you will have to login again.',
+                        colour=Colour.gilded()
+                    )
+                    await message.reply(embed=em, private=True, delete_after=10)
+                else:
+                    em = Embed(
+                        title='Failure',
+                        description='Please submit a valid login code here, and remember not to post anything here that other users tell you to!',
+                        colour=Colour.gilded()
+                    )
+                    await message.reply(embed=em, private=True, delete_after=10)
+                await message.delete()
             if xp_cache.get(id):
                 return # They cannot gain xp at this point in time
             guild_data: dict = self.get_guild_data(message.server_id)

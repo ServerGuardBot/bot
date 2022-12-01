@@ -196,3 +196,17 @@ class UserInfo(db.Model):
 
     def __repr__(self):
         return f'<UserInfo {self.user_id}>'
+
+class BlacklistedRefreshToken(db.Model):
+    """ Blacklisted Refresh Token model for storing non-expired blacklisted tokens """
+    __tablename__ = 'refresh_token_blacklist'
+
+    token = db.Column(db.String(500), nullable=False, primary_key=True)
+    expires = db.Column(db.DateTime, nullable=False)
+
+    def __init__(self, token: str, expires: datetime):
+        self.token = token
+        self.expires = expires
+    
+    def __repr__(self):
+        return f'<BlacklistedRefreshToken {self.token} expires={self.expires.timestamp()}>'
