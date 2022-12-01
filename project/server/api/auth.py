@@ -137,11 +137,7 @@ class LoginResource(MethodView):
         if refresh is not None and refresh is not '':
             blacklist_token(refresh)
 
-        resp = make_response()
-        resp.set_cookie('auth', '')
-        resp.set_cookie('refresh', '')
-
-        return resp, 200
+        return 'Success', 200
 
 class LoginStatusResource(MethodView):
     """ Login Status Resource """
@@ -155,11 +151,11 @@ class LoginStatusResource(MethodView):
                 return 'Waiting', 204
             else:
                 code_cache.remove(code)
-                resp = make_response()
-                resp.set_cookie('auth', AuthToken.generate(status))
-                resp.set_cookie('refresh', RefreshToken.generate(status))
 
-                return resp, 200
+                return jsonify({
+                    'auth': AuthToken.generate(status),
+                    'refresh': RefreshToken.generate(status)
+                }), 200
     async def post(self, code, user_id):
         auth = request.headers.get('authorization')
 
@@ -192,11 +188,10 @@ class RefreshResource(MethodView):
             
             blacklist_token(refresh)
 
-            resp = make_response()
-            resp.set_cookie('auth', AuthToken.generate(refresh_token.user_id))
-            resp.set_cookie('refresh', RefreshToken.generate(refresh_token.user_id))
-
-            return resp, 200
+            return jsonify({
+                'auth': AuthToken.generate(refresh_token.user_id),
+                'refresh': RefreshToken.generate(refresh_token.user_id)
+            }), 200
         except:
             return 'Refresh token has expired, please login again', 403
 
