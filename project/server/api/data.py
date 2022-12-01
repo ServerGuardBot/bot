@@ -18,7 +18,7 @@ class AnalyticsDashResource(MethodView):
         
         dt = AnalyticsItem.get_date(round_to='hour') - timedelta(days=int(days))
         
-        serverHistorical: list = AnalyticsItem.query.filter(AnalyticsItem.date <= dt) \
+        serverHistorical: list = AnalyticsItem.query.filter(AnalyticsItem.date >= dt) \
             .filter(AnalyticsItem.key == 'servers') \
             .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
             .all()
@@ -189,6 +189,9 @@ class BotDataResource(MethodView):
 
 data_blueprint.add_url_rule('/data/<key>', view_func=BotDataResource.as_view('botdata_get'))
 data_blueprint.add_url_rule('/data/<key>/<value>', view_func=BotDataResource.as_view('botdata'))
+
+data_blueprint.add_url_rule('/analytics/servers/dash', view_func=AnalyticsDashResource.as_view('dash_analytics'))
+data_blueprint.add_url_rule('/analytics/servers/dash/<days>', view_func=AnalyticsDashResource.as_view('dash_analytics_days'))
 
 data_blueprint.add_url_rule('/analytics/servers/largest', view_func=LargestServersResource.as_view('largest_servers'))
 data_blueprint.add_url_rule('/analytics/servers/unindexed', view_func=NoneServersResource.as_view('none_servers'))
