@@ -10,7 +10,7 @@ from flask.views import MethodView
 from project import app, db, get_shared_state
 from project.helpers.Cache import Cache
 
-from project.server.models import UserInfo, Guild, BlacklistedRefreshToken
+from project.server.models import GuildUser, UserInfo, Guild, BlacklistedRefreshToken
 
 AUTH_TOKEN_EXPIRY = 60 * 60 # Auth tokens expire after an hour
 REFRESH_TOKEN_EXPIRY = 60 * 60 * 24 * 14 # Refresh tokens expire after two weeks
@@ -105,6 +105,16 @@ class LoginResource(MethodView):
         user_info: UserInfo = UserInfo.query \
             .filter(UserInfo.user_id == auth) \
             .first()
+        
+        guilds = []
+
+        for guild in JSONDecoder().decode(user_info.guilds):
+            guild_user: GuildUser = GuildUser.query \
+                .filter(GuildUser.guild_id == guild['id']) \
+                .filter(GuildUser.user_id == auth) \
+                .first()
+            if guild_user is not None and guild_user.permission_level > 2:
+                guilds.append(guild)
 
         return jsonify({
             'id': auth,
@@ -116,7 +126,7 @@ class LoginResource(MethodView):
                 'avatar': guild['avatar'],
                 'name': guild['name'],
                 'active': is_guild_active(guild['id'])
-            } for guild in JSONDecoder().decode(user_info.guilds)]
+            } for guild in guilds]
         }), 200
     async def post(self):
         try:
