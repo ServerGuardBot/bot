@@ -23,11 +23,25 @@ class AnalyticsDashResource(MethodView):
             .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
             .all()
         
+        largestServers = db.session.query(Guild) \
+            .filter(Guild.active == True) \
+            .filter(Guild.members > 0) \
+            .order_by(Guild.members.desc()) \
+            .limit(10) \
+            .all()
+        
         return jsonify({
             'servers': [{
                 'time': item.date.timestamp(),
                 'value': item.value
-            } for item in serverHistorical]
+            } for item in serverHistorical],
+            'largestServers': [{
+                'id': server.guild_id,
+                'name': server.name,
+                'bio': server.bio,
+                'avatar': server.avatar,
+                'members': server.members
+            } for server in largestServers]
         }), 200
 
 class NoneServersResource(MethodView):
