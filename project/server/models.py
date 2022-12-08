@@ -150,6 +150,7 @@ class UserInfo(db.Model):
 
     guilds = db.Column(db.String(500), nullable=False)
     premium = db.Column(db.String(500), nullable=False, server_default="0")
+    language = db.Column(db.String(10), nullable=False, server_default="en")
 
     @staticmethod
     def update_connections(self, data: dict):

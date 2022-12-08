@@ -581,7 +581,7 @@ class ModerationModule(Module):
 
             if config.get('invite_link_filter', 0) == 1:
                 for domain, invite in re.findall(SERVER_INVITE_REGEX, message.content):
-                    if '/' in invite and not 'i/' in invite:
+                    if '/' in invite and not 'i/' in invite and not 'r/' in invite:
                         continue
                     if isinstance(message, ChatMessage):
                         await message.reply(embed=EMBED_FILTERED(message.author, 'Invite Link Detected'), private=True)
@@ -665,6 +665,7 @@ class ModerationModule(Module):
                                     page_req = requests.get(link, headers={
                                         'user-agent': USER_AGENT
                                     })
+                                    # TODO: Replace all this with an XML parsing solution
                                     if page_req.status_code == 200:
                                         for url in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:image|"og:image"|og:image|'twitter:image'|"twitter:image"|twitter:image|'twitter:image:src'|"twitter:image:src"|twitter:image:src))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
                                             blocked = True
@@ -674,8 +675,16 @@ class ModerationModule(Module):
                                             if og_type.startswith(('article', 'website', 'book', 'profile', 'video', 'music')):
                                                 blocked = False
                                                 break
+                                        for desc in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\s(?:property|name)=(?:'description|"description"|'description'|og:description|"og:description"|og:description))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
+                                            desc: str = desc.lower().strip()
+                                            if 'screenshot' in desc or '':
+                                                blocked = False
+                                                break
                                         for keywords in re.findall(r"""< *meta +name *= *[\"\'] *keywords *[\"\'] *content= *[\"'](.+)[\"\'] *>""", page_req.text):
                                             keywords: str = keywords.lower()
+                                            if 'photo' in keywords or 'image upload' in keywords or 'image hosting' in keywords:
+                                                blocked = True
+                                                break
                                             if 'video' in keywords or not 'image' in keywords:
                                                 blocked = False
                                                 break

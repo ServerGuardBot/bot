@@ -98,8 +98,9 @@ async def get_nsfw_model():
         await asyncio.sleep(.1)
     return nsfw_model
 
-nsfw_thread = Thread(target=load_nsfw)
-nsfw_thread.start()
+if not os.getenv('MIGRATING_DB', '0') == '1':
+    nsfw_thread = Thread(target=load_nsfw)
+    nsfw_thread.start()
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -175,7 +176,8 @@ async def run_bot_loop():
             'authorization': bot_config.SECRET_KEY
         })
 
-load_malicious_url_db()
+if not os.getenv('MIGRATING_DB', '0') == '1':
+    load_malicious_url_db()
 
 @client.event
 async def on_ready():
@@ -287,33 +289,36 @@ async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
         except Exception as e:
             print('Failed to run member role update listener:', e)
 
-print('Registering Modules')
-modules = [str(m) for m in sys.modules if m.startswith('modules.')]
-for module in modules:
-    del sys.modules[module]
+if not os.getenv('MIGRATING_DB', '0') == '1':
+    print('Registering Modules')
+    modules = [str(m) for m in sys.modules if m.startswith('modules.')]
+    for module in modules:
+        del sys.modules[module]
 
-for module_file in get_py_files():
-    fname = os.path.splitext(module_file)[0]
-    # Ignore the base module file
-    if fname == 'base':
-        continue
-    loaded_module = importlib.import_module(f'project.modules.{fname}')
-    classes = inspect.getmembers(loaded_module, inspect.isclass)
-    for class_info in classes:
-        if issubclass(class_info[1], Module) == False:
+    for module_file in get_py_files():
+        fname = os.path.splitext(module_file)[0]
+        # Ignore the base module file
+        if fname == 'base':
             continue
-        clazz = class_info[1](client)
-        # Make sure the module class is an instance of the base module
-        if issubclass(class_info[1], Module):
-            # Skip loading the base module
-            if clazz.name == None:
+        loaded_module = importlib.import_module(f'project.modules.{fname}')
+        classes = inspect.getmembers(loaded_module, inspect.isclass)
+        for class_info in classes:
+            if issubclass(class_info[1], Module) == False:
                 continue
-            clazz.bot = client
-            clazz.initialize()
-            clazz.setup_self()
-            clazz.post_setup()
-            print(f'Loaded module {clazz.name}')
-            del clazz
+            clazz = class_info[1](client)
+            # Make sure the module class is an instance of the base module
+            if issubclass(class_info[1], Module):
+                # Skip loading the base module
+                if clazz.name == None:
+                    continue
+                clazz.bot = client
+                clazz.initialize()
+                clazz.setup_self()
+                clazz.post_setup()
+                print(f'Loaded module {clazz.name}')
+                del clazz
+else:
+    print('DB migration detected, Skipping module load')
 
 logger = logging.getLogger('guilded')
 logger.setLevel(logging.DEBUG)
@@ -338,7 +343,7 @@ app.register_blueprint(guilds_blueprint)
 app.register_blueprint(data_blueprint)
 app.register_blueprint(auth_blueprint)
 
-if app_settings == 'DevelopmentConfig':
+if app_settings == 'DevelopmentConfig' and not os.getenv('MIGRATING_DB', '0') == '1':
     import threading
     def run():
         # Run the bot

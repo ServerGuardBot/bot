@@ -185,7 +185,7 @@ class VerificationModule(Module):
                     ) \
                     .set_footer(text='Server Guard') \
                     .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
-                    .add_field(name='Links', value='[Support Server](https://www.guilded.gg/server-guard) • [Invite](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e)', inline=False)
+                    .add_field(name='Links', value='[Support Server](https://serverguard.xyz/support) • [Website](https://serverguard.xyz) • [Invite](https://serverguard.xyz/invite)', inline=False)
                     msg = await channel.send(embed=em)
                     await msg.add_reaction(Emote(state=bot.http, data={
                         'id': 90002171,

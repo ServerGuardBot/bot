@@ -15,6 +15,7 @@ import requests
 import itertools
 
 LOGIN_CHANNEL_ID = '1f6fae7f-6cdf-403d-80b9-623a76f8b621'
+SUPPORT_SERVER_ID = 'aE9Zg6Kj'
 
 member = commands.MemberConverter()
 channel = commands.ChatChannelConverter()
@@ -48,7 +49,7 @@ class CustomHelpCommand(HelpCommand):
             ) \
             .set_footer(text='Server Guard') \
             .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
-            .add_field(name='Links', value='[Support Server](https://www.guilded.gg/server-guard) • [Invite](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e) • [Docs](https://www.guilded.gg/server-guard/groups/D57rgP7z/channels/7ad31d28-0577-4f18-a80d-d401ceacf9db/docs)', inline=False)
+            .add_field(name='Links', value='[Support Server](https://serverguard.xyz/support) • [Website](https://serverguard.xyz) • [Invite](https://serverguard.xyz/invite) • [Docs](https://serverguard.xyz/docs)', inline=False)
             await destination.send(embed=em)
     
     def shorten_text(self, text):
@@ -283,7 +284,7 @@ class GeneralModule(Module):
             """Get a link to the support server"""
             await ctx.reply(embed=Embed(
                 title='Support Server',
-                description='[Link](https://www.guilded.gg/server-guard)'
+                description='[Link](https://serverguard.xyz/support)'
             ).set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80'))
         
         support.cog = cog
@@ -293,7 +294,7 @@ class GeneralModule(Module):
             """Get an invite link for the bot"""
             await ctx.reply(embed=Embed(
                 title='Invite our Bot',
-                description='[Link](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e)'
+                description='[Link](https://serverguard.xyz/invite)'
             ).set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80'))
         
         invite.cog = cog
@@ -1101,10 +1102,56 @@ class GeneralModule(Module):
                 })
         bot.member_role_update_listeners.append(on_bulk_member_roles_update)
 
+        automated_responses = [
+            {
+                'triggers': [['how','help'], ['get','invite','add','inviting','adding','getting'], ['server guard','bot']],
+                'response': Embed(
+                    title='Invite our Bot',
+                    description='[Link](https://serverguard.xyz/invite)'
+                ) \
+                .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80')
+            },
+            {
+                'triggers': ['how', 'use', ['bot','verification','filter','filters','warnings','warns']],
+                'response': Embed(
+                    title='Read our Documentation',
+                    description='[Link](https://serverguard.xyz/docs)'
+                ) \
+                .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80')
+            },
+            {
+                'triggers': ['how', ['setup','configure','config','change','modify','alter'], ['bot','verification','filter','filters','warnings','warns']],
+                'response': Embed(
+                    title='Read our Documentation',
+                    description='[Link](https://serverguard.xyz/docs)'
+                ) \
+                .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80')
+            }
+        ]
+
         async def on_message(message: ChatMessage):
             id = f'{message.guild.id}/{message.author.id}'
             if message.author.bot:
                 return
+            if message.server_id == SUPPORT_SERVER_ID and not message.channel_id == LOGIN_CHANNEL_ID:
+                content = message.content.lower().strip()
+                for item in automated_responses:
+                    triggered = True
+                    for word in item['triggers']:
+                        if isinstance(word, list):
+                            t = False
+                            for w in word:
+                                if w in content:
+                                    t = True
+                            if not t:
+                                triggered = False
+                                break
+                        else:
+                            if not word in content:
+                                triggered = False
+                                break
+                    if triggered:
+                        await message.reply(embed=item['response'])
             if message.channel_id == LOGIN_CHANNEL_ID:
                 # Do login stuff
                 result = requests.post(f'http://localhost:5000/auth/status/{message.content}/{message.author_id}', headers={
@@ -1166,7 +1213,7 @@ class GeneralModule(Module):
             ) \
             .set_footer(text='Server Guard') \
             .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
-            .add_field(name='Links', value='[Support Server](https://www.guilded.gg/server-guard) • [Invite](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e)', inline=False)
+            .add_field(name='Links', value='[Support Server](https://www.guilded.gg/server-guard) • [Website](https://serverguard.xyz) • [Invite](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e)', inline=False)
             await default.send(embed=em)
 
             result = requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
