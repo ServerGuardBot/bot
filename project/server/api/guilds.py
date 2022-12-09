@@ -95,6 +95,7 @@ class UserInfoResource(MethodView):
             'guilded_data': user_info.guilded_data,
             'created_at': user_info.created_at,
             'connections': encoder.encode(user_info.connections or {}),
+            'language': user_info.language,
             
             'roblox': user_info.roblox,
             'steam': user_info.steam,

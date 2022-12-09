@@ -9,6 +9,7 @@ from guilded.ext.commands.help import HelpCommand, Paginator
 from guilded import Embed, BulkMemberRolesUpdateEvent, BotAddEvent, BotRemoveEvent, ChatMessage, http
 from datetime import datetime
 from humanfriendly import format_timespan
+from project.helpers.translator import getLanguages, translate
 
 import os
 import requests
@@ -43,13 +44,13 @@ class CustomHelpCommand(HelpCommand):
         destination = self.get_destination()
         for page in self.paginator.pages:
             em = Embed(
-                title = 'Commands',
+                title = await translate(self.language, 'help.title'),
                 description = page,
                 colour = Colour.gilded()
             ) \
             .set_footer(text='Server Guard') \
             .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
-            .add_field(name='Links', value='[Support Server](https://serverguard.xyz/support) • [Website](https://serverguard.xyz) • [Invite](https://serverguard.xyz/invite) • [Docs](https://serverguard.xyz/docs)', inline=False)
+            .add_field(name=(await translate(self.language, 'help.links')), value=f'[{await translate(self.language, "link.support")}](https://serverguard.xyz/support) • [{await translate(self.language, "link.website")}](https://serverguard.xyz) • [{await translate(self.language, "link.invite")}](https://serverguard.xyz/invite) • [{await translate(self.language, "link.docs")}](https://serverguard.xyz/docs)', inline=False)
             await destination.send(embed=em)
     
     def shorten_text(self, text):
@@ -58,14 +59,25 @@ class CustomHelpCommand(HelpCommand):
             return text[:self.width - 3].rstrip() + '...'
         return text
 
-    def get_ending_note(self):
+    async def get_ending_note(self):
         """:class:`str`: Returns help command's ending note. This is mainly useful to override for i18n purposes."""
         command_name = self.invoked_with
         return (
-            f"Type {self.context.clean_prefix}{command_name} command for more info on a command."
+            await translate(self.language, 'help.info')
         )
     
-    def add_bot_commands_formatting(self, commands, heading):
+    def generate_command_translation_key(self, command: commands.Command):
+        key = command.name.lower()
+        parent = command
+
+        while parent.parent is not None and parent.parent.name.lower() != 'config':
+            key = f'{parent.name.lower()}.{key}'
+            parent = parent.parent
+        key = f'command.{key}'
+        print(key)
+        return key
+    
+    async def add_bot_commands_formatting(self, commands, heading):
         """Adds the minified bot heading with commands to the output.
         The formatting should be added to the :attr:`paginator`.
         The default implementation is a bold underline heading followed
@@ -78,11 +90,11 @@ class CustomHelpCommand(HelpCommand):
             The heading to add to the line.
         """
         if commands:
-            joined = ', '.join(f'`{c.name}`' for c in commands)
-            self.paginator.add_line(f'__**{heading}**__')
+            joined = ', '.join([c.name for c in commands])
+            self.paginator.add_line(f'__**{await translate(self.language, "category." + heading)}**__')
             self.paginator.add_line(joined)
     
-    def add_subcommand_formatting(self, command):
+    async def add_subcommand_formatting(self, command):
         """Adds formatting information on a subcommand.
         The formatting should be added to the :attr:`paginator`.
         The default implementation is the prefix and the :attr:`Command.qualified_name`
@@ -93,7 +105,7 @@ class CustomHelpCommand(HelpCommand):
             The command to show information of.
         """
         fmt = '`{0}` \N{EN DASH} {1}' if command.short_doc else '`{0}`'
-        self.paginator.add_line(fmt.format(command.name, command.short_doc))
+        self.paginator.add_line(fmt.format(command.name, await translate(self.language, self.generate_command_translation_key(command))))
     
     def add_aliases_formatting(self, aliases):
         """Adds the formatting information on a command's aliases.
@@ -108,7 +120,7 @@ class CustomHelpCommand(HelpCommand):
         """
         self.paginator.add_line(f'**{self.aliases_heading}** {", ".join([f"`{c}`" for c in aliases])}', empty=True)
     
-    def add_command_formatting(self, command):
+    async def add_command_formatting(self, command):
         """A utility function to format commands and groups.
         Parameters
         ------------
@@ -128,9 +140,9 @@ class CustomHelpCommand(HelpCommand):
 
         if command.help:
             try:
-                self.paginator.add_line(command.help, empty=True)
+                self.paginator.add_line(await translate(self.language, self.generate_command_translation_key(command)), empty=True)
             except RuntimeError:
-                for line in command.help.splitlines():
+                for line in (await translate(self.language, self.generate_command_translation_key(command))).splitlines():
                     self.paginator.add_line(line)
                 self.paginator.add_line()
     
@@ -144,6 +156,7 @@ class CustomHelpCommand(HelpCommand):
             return ctx.channel
     
     async def prepare_help_command(self, ctx, command):
+        self.language = self.context.message.language
         self.paginator.clear()
         await super().prepare_help_command(ctx, command)
 
@@ -165,9 +178,9 @@ class CustomHelpCommand(HelpCommand):
 
         for category, commands in to_iterate:
             commands = sorted(commands, key=lambda c: c.name) if self.sort_commands else list(commands)
-            self.add_bot_commands_formatting(commands, category)
+            await self.add_bot_commands_formatting(commands, category)
 
-        note = self.get_ending_note()
+        note = await self.get_ending_note()
         if note:
             self.paginator.add_line()
             self.paginator.add_line(note)
@@ -186,9 +199,9 @@ class CustomHelpCommand(HelpCommand):
         if filtered:
             self.paginator.add_line(f'**{cog.qualified_name} {self.commands_heading}**')
             for command in filtered:
-                self.add_subcommand_formatting(command)
+                await self.add_subcommand_formatting(command)
 
-            note = self.get_ending_note()
+            note = await self.get_ending_note()
             if note:
                 self.paginator.add_line()
                 self.paginator.add_line(note)
@@ -196,16 +209,16 @@ class CustomHelpCommand(HelpCommand):
         await self.send_pages()
 
     async def send_group_help(self, group):
-        self.add_command_formatting(group)
+        await self.add_command_formatting(group)
 
         filtered = await self.filter_commands(group.commands, sort=self.sort_commands)
         if filtered:
 
             self.paginator.add_line(f'**{self.commands_heading}**')
             for command in filtered:
-                self.add_subcommand_formatting(command)
+                await self.add_subcommand_formatting(command)
 
-            note = self.get_ending_note()
+            note = await self.get_ending_note()
             if note:
                 self.paginator.add_line()
                 self.paginator.add_line(note)
@@ -213,7 +226,7 @@ class CustomHelpCommand(HelpCommand):
         await self.send_pages()
 
     async def send_command_help(self, command):
-        self.add_command_formatting(command)
+        await self.add_command_formatting(command)
         self.paginator.close_page()
         await self.send_pages()
 
@@ -280,11 +293,45 @@ class GeneralModule(Module):
         analytics.cog = cog
 
         @bot.command()
+        async def language(_, ctx: commands.Context, lang: str):
+            """Set the language the bot will respond in"""
+            validLangs = await getLanguages()
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
+            for key in validLangs.keys():
+                name = validLangs[key]
+                if lang.lower() == name.lower():
+                    user_data_req = requests.patch(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', json={
+                        'language': key
+                    }, headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(key, 'command.language.success')))
+                    return
+            await ctx.reply(embed=EMBED_COMMAND_ERROR((await translate(curLang, 'command.language.failure')
+                + '\n'
+                + '\n'.join(validLangs.values())
+            )))
+        
+        language.cog = cog
+
+        @bot.command()
         async def support(_, ctx: commands.Context):
             """Get a link to the support server"""
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             await ctx.reply(embed=Embed(
-                title='Support Server',
-                description='[Link](https://serverguard.xyz/support)'
+                title=await translate(curLang, 'link.support'),
+                description=f'[{await translate(curLang, "link")}](https://serverguard.xyz/support)'
             ).set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80'))
         
         support.cog = cog
@@ -292,9 +339,15 @@ class GeneralModule(Module):
         @bot.command()
         async def invite(_, ctx: commands.Context):
             """Get an invite link for the bot"""
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             await ctx.reply(embed=Embed(
-                title='Invite our Bot',
-                description='[Link](https://serverguard.xyz/invite)'
+                title=await translate(curLang, 'link.invite'),
+                description=f'[{await translate(curLang, "link")}](https://serverguard.xyz/invite)'
             ).set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80'))
         
         invite.cog = cog
@@ -311,6 +364,12 @@ class GeneralModule(Module):
             """Set how many messages a user can say in a short timespan before the bot removes them, setting to 0 disables"""
             await self.validate_permission_level(2, ctx)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/automod_spam', json={
                 'value': amount
             }, headers={
@@ -318,15 +377,21 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed automod spam limit.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.spam.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @config.command(name='admin_contact')
         async def config_admin_contact(ctx: commands.Context, *_account):
             """Specify an admin account the user can contact"""
             await self.validate_permission_level(2, ctx)
             account = ' '.join(_account)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             ref = await self.convert_member(ctx, account)
 
@@ -351,18 +416,24 @@ class GeneralModule(Module):
                         'authorization': bot_config.SECRET_KEY
                     })
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This command expects a URL, Valid Email, or User to be specified.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.admin_contact.error")))
                     return
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed server admin contact.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.admin_contact.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @config.command(name='tor_block')
         async def config_tor_block(ctx: commands.Context, on: str):
             """Turn on or off the tor exit node blocklist for verification"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/block_tor', json={
                 'value': on == 'yes' and 1 or 0
@@ -371,14 +442,20 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed tor blocking status.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.tor_block.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
 
         @config.command(name='invite_link_filter')
         async def config_invite_link_filter(ctx: commands.Context, on: str):
             """Turn on or off the discord/guilded invite link filter"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/invite_link_filter', json={
                 'value': on == 'yes' and 1 or 0
@@ -387,14 +464,20 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed invite filtering status.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.invite_link_filter.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @config.command(name='duplicate_filter')
         async def config_duplicate_filter(ctx: commands.Context, on: str):
             """Turn on or off the duplicate text filter"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/automod_duplicate', json={
                 'value': on == 'yes' and 1 or 0
@@ -403,14 +486,20 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed duplicate text filtering status.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.duplicate_filter.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @config.command(name='url_filter')
         async def config_url_filter(ctx: commands.Context, on: str):
             """Turn on or off the malicious URL filter"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/url_filter', json={
                 'value': on == 'yes' and 1 or 0
@@ -419,9 +508,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed url filtering status.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.url_filter.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @config.command(name='mute_role')
         async def config_mute_role(ctx: commands.Context, *_target):
@@ -429,6 +518,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/mute_role', json={
@@ -438,9 +533,9 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed muted role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.mute_role.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
 
         @config.command(name='verification_channel')
         async def config_verif_channel(ctx: commands.Context, *_target):
@@ -448,6 +543,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verification_channel', json={
@@ -457,9 +558,9 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed verification channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.verification_channel.changed")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             elif target.isspace() or target == '':
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verification_channel', json={
                     'value': ''
@@ -468,11 +569,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully disabled verification.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.verification_channel.disabled")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
         
         @config.command(name='nsfw_logs_channel')
         async def config_nsfw_logs_channel(ctx: commands.Context, *_target):
@@ -485,6 +586,12 @@ class GeneralModule(Module):
                 return
             ref = await self.convert_channel(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/nsfw_logs_channel', json={
                     'value': ref.id
@@ -493,16 +600,22 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed NSFW logs channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.nsfw_logs_channel.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
         
         @config.command(name='disable_nsfw')
         async def config_disable_nsfw(ctx: commands.Context):
             """Disable the NSFW filter"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/nsfw_logs_channel', json={
                 'value': ''
@@ -511,9 +624,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed NSFW logs channel.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.disable_nsfw.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @config.command(name='message_logs_channel')
         async def config_message_logs_channel(ctx: commands.Context, *_target):
@@ -521,6 +634,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/message_logs_channel', json={
@@ -530,11 +649,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed message logs channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.message_logs_channel.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
         
         @config.command(name='traffic_logs_channel')
         async def config_traffic_logs_channel(ctx: commands.Context, *_target):
@@ -542,6 +661,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/traffic_logs_channel', json={
@@ -551,11 +676,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed traffic logs channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.traffic_logs_channel.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
 
         @config.command(name='verify_logs_channel')
         async def config_verify_logs_channel(ctx: commands.Context, *_target):
@@ -563,6 +688,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verify_logs_channel', json={
@@ -572,11 +703,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed verify logs channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.verify_logs_channel.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
 
         @config.command(name='action_logs_channel')
         async def config_action_logs_channel(ctx: commands.Context, *_target):
@@ -584,6 +715,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/action_logs_channel', json={
@@ -593,11 +730,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed action logs channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.action_logs_channel.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
 
         @config.command(name='automod_logs_channel')
         async def config_automod_logs_channel(ctx: commands.Context, *_target):
@@ -605,6 +742,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_channel(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/automod_logs_channel', json={
@@ -614,11 +757,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed automod logs channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.automod_logs_channel.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
         
         @config.command(name='verified_role')
         async def config_verified_role(ctx: commands.Context, *_target):
@@ -626,6 +769,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/verified_role', json={
@@ -635,11 +784,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed verified role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.verified_role.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
         
         @config.command(name='unverified_role')
         async def config_unverified_role(ctx: commands.Context, *_target):
@@ -649,6 +798,12 @@ class GeneralModule(Module):
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if ref is not None:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/unverified_role', json={
                     'value': ref.id
@@ -657,11 +812,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed unverified role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.unverified_role.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
         
         @config.group(name='filter')
         async def filter(ctx: commands.Context):
@@ -673,6 +828,12 @@ class GeneralModule(Module):
             """Add a word to the filter list"""
             await self.validate_permission_level(2, ctx)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/filters', json={
                 'value': word.lower()
             }, headers={
@@ -681,14 +842,20 @@ class GeneralModule(Module):
 
             if result.status_code == 200 or result.status_code == 201:
                 reset_filter_cache(ctx.server.id)
-                await ctx.reply(embed=EMBED_SUCCESS(f'Successfully added "{word}" to filter.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.filter.add.success", {'word': word})))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @filter.command(name='remove')
         async def filter_remove_word(ctx: commands.Context, word: str):
             """Remove a word from the filter list"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/filters', json={
                 'value': word.lower()
@@ -698,15 +865,21 @@ class GeneralModule(Module):
 
             if result.status_code == 204:
                 reset_filter_cache(ctx.server.id)
-                await ctx.reply(embed=EMBED_SUCCESS(f'Successfully removed "{word}" from filter.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.filter.remove.success", {'word': word})))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
 
         @filter.command(name='toxicity')
         async def filter_toxicity(ctx: commands.Context, sensitivity: int=0):
             """Set the toxicity filter's threshold, [0-100] (0 disables)"""
             await self.validate_permission_level(2, ctx)
             sensitivity = min(sensitivity, 100)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/toxicity', json={
                 'value': sensitivity
@@ -715,15 +888,21 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully set toxicity filter.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.filter.toxicity.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @filter.command(name='hatespeech')
         async def filter_hatespeech(ctx: commands.Context, sensitivity: int=0):
             """Set the hate-speech filter's threshold, [0-100] (0 disables)"""
             await self.validate_permission_level(2, ctx)
             sensitivity = min(sensitivity, 100)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/hatespeech', json={
                 'value': sensitivity
@@ -732,9 +911,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully set hate speech filter.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.filter.hatespeech.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
         
         @config.group(name='mod_role')
         async def mod_role(ctx: commands.Context):
@@ -748,6 +927,12 @@ class GeneralModule(Module):
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if ref is not None:
                 result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
@@ -759,13 +944,13 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully added mod role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.mod_role.add.success")))
                 elif result.status_code == 400:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is already a mod role.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.mod_role.add.error")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
         
         @mod_role.command(name='remove')
         async def mod_remove(ctx: commands.Context, *_target):
@@ -773,6 +958,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
@@ -785,13 +976,13 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 204:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully removed mod role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.mod_role.remove.success")))
                 elif result.status_code == 400:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is not a mod role.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.mod_role.remove.error")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
         
         @config.group(name='admin_role')
         async def admin_role(ctx: commands.Context):
@@ -805,6 +996,12 @@ class GeneralModule(Module):
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if ref is not None:
                 result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
                     'value': {
@@ -816,13 +1013,13 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully added admin role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.admin_role.add.success")))
                 elif result.status_code == 400:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is already an admin role.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.admin_role.add.error")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
         
         @admin_role.command(name='remove')
         async def admin_remove(ctx: commands.Context, *_target):
@@ -830,6 +1027,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/roles', json={
@@ -842,13 +1045,13 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 204:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully removed admin role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.admin_role.remove.success")))
                 elif result.status_code == 400:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is not an admin role.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.admin_role.remove.error")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
         
         @config.group(name='trusted_role')
         async def trusted_role(ctx: commands.Context):
@@ -862,6 +1065,12 @@ class GeneralModule(Module):
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if ref is not None:
                 result = requests.post(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/trusted_roles', json={
                     'value': ref.id
@@ -870,13 +1079,13 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully added trusted role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.trusted_role.add.success")))
                 elif result.status_code == 400:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is already a trusted role.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.trusted_role.add.error")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
         
         @trusted_role.command(name='remove')
         async def trusted_remove(ctx: commands.Context, *_target):
@@ -884,6 +1093,12 @@ class GeneralModule(Module):
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
             ref = await self.convert_role(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if ref is not None:
                 result = requests.delete(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/trusted_roles', json={
@@ -893,18 +1108,24 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 204:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully removed trusted role.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.trusted_role.remove.success")))
                 elif result.status_code == 400:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('This is not a trusted role.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.trusted_role.remove.error")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
         
         @trusted_role.command(name='block_images')
         async def trusted_block_images(ctx: commands.Context, on: str):
             """Turn on or off image link blocking for untrusted users"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/untrusted_block_images', json={
                 'value': on == 'yes' and 1 or 0
@@ -913,9 +1134,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully toggled untrusted user image blocking.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.trusted_role.block_images.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
 
         @config.group(name='welcomer')
         async def welcomer(ctx: commands.Context):
@@ -927,6 +1148,12 @@ class GeneralModule(Module):
             """Enable/disable the welcomer"""
             await self.validate_permission_level(2, ctx)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/use_welcome', json={
                 'value': on == 'yes' and 1 or 0
             }, headers={
@@ -934,9 +1161,9 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully toggled welcomer.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.welcomer.set_enabled.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
 
         @welcomer.command(name='message')
         async def welcomer_message(ctx: commands.Context, *_target):
@@ -944,6 +1171,12 @@ class GeneralModule(Module):
             {mention} - Welcomed user's ping
             {server_name} - The name of the server"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             message = ' '.join(_target)
             if message.isspace():
@@ -956,14 +1189,20 @@ class GeneralModule(Module):
             })
 
             if result.status_code == 200 or result.status_code == 201:
-                await ctx.reply(embed=EMBED_SUCCESS('Successfully changed welcome message.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.welcomer.message.success")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
 
         @welcomer.command(name='image')
         async def welcomer_image(ctx: commands.Context, image: str = ''):
             """Set the welcomer's image"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             url = re.search("(?P<url>https?://[^\s]+)", image).group("url")
 
@@ -975,16 +1214,22 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed welcome image.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.welcomer.image.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please provide a valid image URL!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.image")))
 
         @welcomer.command(name='channel')
         async def welcomer_channel(ctx: commands.Context, *_target):
             """Set the welcomer's channel"""
             await self.validate_permission_level(2, ctx)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             target = ' '.join(_target)
             await self.validate_permission_level(2, ctx)
@@ -998,11 +1243,11 @@ class GeneralModule(Module):
                 })
 
                 if result.status_code == 200 or result.status_code == 201:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed the welcomer channel.'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.welcomer.channel.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('An unknown error occurred while performing this action.'))
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid channel!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
         
         @config.group(name='xp')
         async def xp(ctx: commands.Context):
@@ -1030,29 +1275,41 @@ class GeneralModule(Module):
             if int(value) is not None:
                 result = change_xp_gain(ctx.server.id, -1, int(value))
 
+                user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                user_info = user_data_req.json()
+                curLang = user_info.get('language', 'en')
+
                 if result.status_code >= 200 and result.status_code < 300:
-                    await ctx.reply(embed=EMBED_SUCCESS('Successfully changed the XP gain for all members'))
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.xp.all.success")))
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR())
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid number!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.number")))
         
         @xp.command(name='role')
         async def xp_role(ctx: commands.Context, role: str, value: str):
             """Set the XP gain for a specified role, setting to 0 disables"""
             role_object = await self.convert_role(ctx, role)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
             if role_object is None:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid role!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.role")))
                 return
             if int(value) is not None:
                 result = change_xp_gain(ctx.server.id, role_object.get('id'), int(value))
 
                 if result.status_code >= 200 and result.status_code < 300:
-                    await ctx.reply(embed=EMBED_SUCCESS(f'Successfully changed the XP gain for role <@{role_object.get("id")}>'), silent=True)
+                    await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, "command.xp.role.success", {"role_id": role_object.get("id")})), silent=True)
                 else:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR())
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
             else:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('Please specify a valid number!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.number")))
 
         async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
             if event.server_id == 'aE9Zg6Kj':

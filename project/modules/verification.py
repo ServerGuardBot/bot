@@ -2,6 +2,7 @@ from datetime import datetime
 from json import JSONEncoder
 from guilded import Colour, ChatChannel, Embed, BanDeleteEvent, BanCreateEvent, MemberJoinEvent, MessageReactionAddEvent, BulkMemberRolesUpdateEvent, ChatMessage, Server, User, Emote
 from guilded.ext import commands
+from project.helpers.translator import translate
 from project.modules.base import Module
 from project import bot_config
 
@@ -29,6 +30,12 @@ class VerificationModule(Module):
         welcome_channel_id = config.get('welcome_channel', server.default_channel_id)
         welcomer_enabled = config.get('use_welcome', 0)
 
+        user_data_req = requests.get(f'http://localhost:5000/userinfo/{server.id}/{user.id}', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+        user_info = user_data_req.json()
+        curLang = user_info.get('language', 'en')
+
         if welcomer_enabled == 1:
             replacements = {
                 '{mention}': user.mention,
@@ -39,7 +46,7 @@ class VerificationModule(Module):
                 welcome_message = welcome_message.replace(key, value)
 
             em = Embed(
-                title='Welcome!',
+                title=await translate(curLang, 'embed.welcome'),
                 description=welcome_message,
                 colour=Colour.gilded()
             )
@@ -131,10 +138,16 @@ class VerificationModule(Module):
                 'authorization': bot_config.SECRET_KEY
             })
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if result.status_code == 200:
-                await ctx.reply(EMBED_SUCCESS('Successfully allowed verification bypass.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.bypass.success')))
             else:
-                await ctx.reply(EMBED_COMMAND_ERROR())
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error')))
         
         bypass.cog = cog
         
@@ -151,10 +164,16 @@ class VerificationModule(Module):
                 'authorization': bot_config.SECRET_KEY
             })
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if result.status_code == 200:
-                await ctx.reply(EMBED_SUCCESS('Successfully disallowed verification bypass.'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.unbypass.success')))
             else:
-                await ctx.reply(EMBED_COMMAND_ERROR())
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error')))
         
         unbypass.cog = cog
 
@@ -170,6 +189,12 @@ class VerificationModule(Module):
             
             if verification_channel and verification_channel.isspace() is False and verification_channel != '':
                 # Only trigger these if verification is enabled, indicated by whether or not verification_channel is specified
+                user_data_req = requests.get(f'http://localhost:5000/userinfo/{event.server.id}/{event.member.id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                user_info = user_data_req.json()
+                curLang = user_info.get('language', 'en')
+
                 if unverified_role:
                     requests.put(f'https://www.guilded.gg/api/v1/servers/{event.server_id}/members/{event.member.id}/roles/{unverified_role}',
                     headers={
@@ -179,13 +204,13 @@ class VerificationModule(Module):
                     channel: ChatChannel = await event.server.getch_channel(verification_channel)
                     em = Embed(
                         title='Verification',
-                        description=f'Welcome {event.member.mention}! Please react to this message with a :white_check_mark: to start verification!\n\n**If you are unable to send messages here or after verifying, please try reloading your Guilded client!**',
+                        description=await translate(curLang, 'verify.welcome', {'user_mention': event.member.mention}),
                         colour=Colour.gilded(),
                         timestamp=datetime.now()
                     ) \
                     .set_footer(text='Server Guard') \
                     .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Medium.webp') \
-                    .add_field(name='Links', value='[Support Server](https://serverguard.xyz/support) • [Website](https://serverguard.xyz) • [Invite](https://serverguard.xyz/invite)', inline=False)
+                    .add_field(name='Links', value=f'[{await translate(curLang, "link.support")}](https://serverguard.xyz/support) • [{await translate(curLang, "link.website")}](https://serverguard.xyz) • [{await translate(curLang, "link.invite")}](https://serverguard.xyz/invite)', inline=False)
                     msg = await channel.send(embed=em)
                     await msg.add_reaction(Emote(state=bot.http, data={
                         'id': 90002171,

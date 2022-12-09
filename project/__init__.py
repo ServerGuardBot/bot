@@ -202,6 +202,16 @@ async def on_message(event: MessageEvent):
     for channel_id in message.raw_channel_mentions:
         channel = await message.server.getch_channel(channel_id)
         message.content = message.content.replace(f'#{channel.name}', f'<#{channel.id}>')
+    
+    user_data_req = requests.get(f'http://localhost:5000/userinfo/{message.server_id}/{message.author_id}', headers={
+        'authorization': bot_config.SECRET_KEY
+    })
+
+    if user_data_req.status_code == 200:
+        message.language = user_data_req.json().get('language', 'en')
+    else:
+        message.language = 'en'
+    
     await client.process_commands(message)
     for callback in client.message_listeners:
         try:

@@ -3,6 +3,7 @@ import re
 from project.helpers.embeds import *
 from project.helpers.images import *
 from project.helpers.Cache import Cache
+from project.helpers.translator import translate
 from project.modules.base import Module
 from project import bot_config, bot_api, malicious_urls
 from guilded.ext import commands
@@ -110,6 +111,12 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if await self.is_moderator(user):
                 await ctx.reply('This user is a moderator, I can\'t do that!')
                 return
@@ -141,14 +148,14 @@ class ModerationModule(Module):
                         'authorization': bot_config.SECRET_KEY
                     })
                 em = Embed(
-                    title = 'Ban Issued',
+                    title = await translate(curLang, 'command.ban.title'),
                     colour = Colour.orange()
                 )
-                em.add_field(name='User', value=user.name)
-                em.add_field(name='Issued By', value=ctx.author.name)
+                em.add_field(name=await translate(curLang, 'log.user'), value=user.name)
+                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.name)
                 if timespan is not None:
-                    em.add_field(name='Lasts', value=format_timespan(timespan))
-                em.add_field(name='Reason', value=reason, inline=False)
+                    em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
+                em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
                 await ctx.reply(embed=em)
                 if logs_channel:
                     channel = await ctx.server.fetch_channel(logs_channel)
@@ -162,15 +169,21 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target, True)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if user is None:
-                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
                 return
 
             await ctx.server.unban(user)
             requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/ban', headers={
                 'authorization': bot_config.SECRET_KEY
             })
-            await ctx.reply(embed=EMBED_SUCCESS(f'{user.name} was unbanned'))
+            await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.unban.success', {'name': user.name})))
 
         unban.cog = cog
         
@@ -180,8 +193,14 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if user is None:
-                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
                 return
 
             bot_api.session = aiohttp.ClientSession()
@@ -217,14 +236,14 @@ class ModerationModule(Module):
                     'authorization': bot_config.SECRET_KEY
                 })
                 em = Embed(
-                    title = 'Mute Issued',
+                    title = await translate(curLang, 'command.mute.title'),
                     colour = Colour.orange()
                 )
-                em.add_field(name='User', value=user.name)
-                em.add_field(name='Issued By', value=ctx.author.name)
+                em.add_field(name=await translate(curLang, 'log.user'), value=user.name)
+                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.name)
                 if timespan is not None:
-                    em.add_field(name='Lasts', value=format_timespan(timespan))
-                em.add_field(name='Reason', value=reason, inline=False)
+                    em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
+                em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
                 await ctx.reply(embed=em)
                 if logs_channel:
                     channel = await ctx.server.fetch_channel(logs_channel)
@@ -239,8 +258,14 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if user is None:
-                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
                 return
 
             bot_api.session = aiohttp.ClientSession()
@@ -255,7 +280,7 @@ class ModerationModule(Module):
             requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/mute', headers={
                 'authorization': bot_config.SECRET_KEY
             })
-            await ctx.reply(embed=EMBED_SUCCESS(f'{user.mention} was unmuted'))
+            await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.unmute.success', {'mention': user.mention})))
             await bot_api.session.close()
         
         unmute.cog = cog
@@ -265,6 +290,12 @@ class ModerationModule(Module):
             """[Moderator+] Warn a user"""
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
 
             if user is None:
                 await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
@@ -295,14 +326,14 @@ class ModerationModule(Module):
                     'authorization': bot_config.SECRET_KEY
                 })
                 em = Embed(
-                    title = 'Warning Issued',
+                    title = await translate(curLang, 'command.warn.title'),
                     colour = Colour.orange()
                 )
-                em.add_field(name='User', value=user.name)
-                em.add_field(name='Issued By', value=ctx.author.name)
+                em.add_field(name=await translate(curLang, 'log.user'), value=user.name)
+                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.name)
                 if timespan is not None:
-                    em.add_field(name='Lasts', value=format_timespan(timespan))
-                em.add_field(name='Reason', value=reason, inline=False)
+                    em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
+                em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
                 await ctx.reply(embed=em)
                 if logs_channel:
                     channel = await ctx.server.fetch_channel(logs_channel)
@@ -316,8 +347,14 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if user is None:
-                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
                 return
 
             result = requests.get(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/warnings', headers={
@@ -326,8 +363,8 @@ class ModerationModule(Module):
             if result.status_code == 200:
                 warns = result.json()
                 em = Embed(
-                    title = f'Warnings for {user.name}',
-                    description = len(warns) > 0 and ''.join([f'{item["id"]} | <@{item["issuer"]}> - {item["reason"]}{item.get("when") and " - " + datetime.fromtimestamp(item["when"]).strftime("%b %d %Y at %H:%M %p %Z") or ""}\n' for item in warns['result']]) or 'This user has no warnings',
+                    title = await translate(curLang, 'command.warnings.title', {'username': user.name}),
+                    description = len(warns) > 0 and ''.join([f'{item["id"]} | <@{item["issuer"]}> - {item["reason"]}{item.get("when") and " - " + datetime.fromtimestamp(item["when"]).strftime("%b %d %Y at %H:%M %p %Z") or ""}\n' for item in warns['result']]) or await translate(curLang, 'command.warnings.none'),
                     colour = Colour.orange()
                 )
                 await ctx.reply(embed=em)
@@ -342,8 +379,14 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if user is None:
-                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
                 return
 
             if id:
@@ -352,15 +395,15 @@ class ModerationModule(Module):
                 })
                 em = Embed(
                     title = f'Deleted warning {id} for {user.name}',
-                    description = f'Successfully cleared warning {id} for {user.name}',
+                    description = await translate(curLang, 'command.delwarn.success', {'id': id, 'username': user.name}),
                     colour = Colour.green()
                 )
-                await ctx.reply(embed=result.status_code == 404 and EMBED_COMMAND_ERROR(f'A warning with id {id} for user {user.name} does not exist') or em)
+                await ctx.reply(embed=result.status_code == 404 and EMBED_COMMAND_ERROR(await translate(curLang, 'command.delwarn.error', {'id': id, 'username': user.name})) or em)
             else:
                 result = requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/warnings', headers={
                     'authorization': bot_config.SECRET_KEY
                 })
-                await ctx.reply(embed=EMBED_SUCCESS(f'Successfully cleared all warnings for {user.name}!'))
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.delwarn.success.all', {'username': user.name})))
         
         delwarn.cog = cog
         
@@ -370,8 +413,14 @@ class ModerationModule(Module):
             await self.validate_permission_level(1, ctx)
             user = await self.convert_member(ctx, target)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if user is None:
-                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR('Please specify a valid user!'))
+                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
                 return
 
             if user is not None:
@@ -381,14 +430,14 @@ class ModerationModule(Module):
                 diff = abs(datetime.now().timestamp() - created_time)
                 em = Embed(
                     title=f'{user.name} ({user.id})',
-                    description=f'Information about the user {user.mention}. {user.nick is not None and f"They have the nickname {user.nick}" or "They do not have a nickname."}',
+                    description=f'{await translate(curLang, "userinfo.content", {"user_mention": user.mention})}. {await translate(curLang, user.nick is None and "userinfo.nickname.none" or "userinfo.nickname.has")}',
                     colour=Colour.gilded(),
                     url=user.profile_url
                 ) \
                 .set_thumbnail(url=user.avatar.aws_url)
-                em.add_field(name='Roles', value=', '.join([f'<@{role}>' for role in role_ids]), inline=False)
-                em.add_field(name='Account created', value=user.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
-                em.add_field(name='Joined at', value=user.joined_at.strftime("%b %d %Y at %H:%M %p %Z"))
+                em.add_field(name=await translate(curLang, 'userinfo.roles'), value=', '.join([f'<@{role}>' for role in role_ids]), inline=False)
+                em.add_field(name=await translate(curLang, 'userinfo.creation'), value=user.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n' + f':warning: {await translate(curLang, "userinfo.recent")}' or ''))
+                em.add_field(name=await translate(curLang, 'userinfo.joined'), value=user.joined_at.strftime("%b %d %Y at %H:%M %p %Z"))
                 await ctx.reply(embed=em)
         
         userinfo.cog = cog
@@ -396,8 +445,15 @@ class ModerationModule(Module):
         @bot.command()
         async def reset_xp(_, ctx: commands.Context, *_target):
             """[Manage XP] Reset the XP of all mentioned users"""
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             if (not await self.user_can_manage_xp(ctx.author)) and not ctx.author.id == ctx.server.owner_id:
-                await ctx.reply(embed=EMBED_COMMAND_ERROR('You need to be able to manage XP to use this command!'))
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.reset_xp.error')))
                 return
             
             reset_members = []
@@ -410,7 +466,7 @@ class ModerationModule(Module):
                 except Exception as e:
                     pass
             NEWLINE = '\n'
-            await ctx.reply(embed=EMBED_SUCCESS(f'The levels of the following users have been reset:{NEWLINE}{NEWLINE.join([member.mention for member in reset_members])}'))
+            await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.reset_xp.success', {"mentions": NEWLINE.join([member.mention for member in reset_members])})))
         
         reset_xp.cog = cog
         
@@ -547,6 +603,12 @@ class ModerationModule(Module):
         async def handle_text_message(message):
             await self._update_guild_data(message.server_id)
 
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{message.server_id}/{message.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
             guild_data: dict = self.get_guild_data(message.server_id)
             config = guild_data.get('config', {})
             custom_filter = config.get('filters')
@@ -559,7 +621,7 @@ class ModerationModule(Module):
             if config.get('automod_duplicate', 0) == 1 and len(message.content) > 5:
                 if repeats(message.content):
                     if isinstance(message, ChatMessage):
-                        await message.reply(embed=EMBED_FILTERED(message.author, 'Duplicate text'), private=True)
+                        await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.duplicate_text')), private=True)
                     await message.delete()
                     return True
 
@@ -567,7 +629,7 @@ class ModerationModule(Module):
                 for url in malicious_urls.keys():
                     if url in message.content:
                         if isinstance(message, ChatMessage):
-                            await message.reply(embed=EMBED_FILTERED(message.author, 'Malicious URL Detected'), private=True)
+                            await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.malicious_url')), private=True)
                         await message.delete()
                         if logs_channel is not None:
                             await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
@@ -575,7 +637,7 @@ class ModerationModule(Module):
                                 description=message.content,
                                 url=message.share_url,
                                 colour = Colour.red(),
-                            ).add_field(name='Threat Category', value=malicious_urls.get(url, 'unknown'), inline=False)\
+                            ).add_field(name='Threat Category', inline=False)\
                             .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
                         return True
 
@@ -584,11 +646,11 @@ class ModerationModule(Module):
                     if '/' in invite and not 'i/' in invite and not 'r/' in invite:
                         continue
                     if isinstance(message, ChatMessage):
-                        await message.reply(embed=EMBED_FILTERED(message.author, 'Invite Link Detected'), private=True)
+                        await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.invite_link')), private=True)
                     await message.delete()
                     if logs_channel is not None:
                         await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
-                            title='Invite Link Detected',
+                            title='Invite Linked Detected',
                             description=message.content,
                             url=message.share_url,
                             colour = Colour.red(),
@@ -608,12 +670,12 @@ class ModerationModule(Module):
             hit_filter = False
             if config.get('toxicity', 0) > 0 and toxicity_proba >= config.get('toxicity', 0):
                 if isinstance(message, ChatMessage):
-                    await message.reply(embed=EMBED_FILTERED(message.author, 'Toxicity'),private=True)
+                    await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.toxicity')),private=True)
                 await message.delete()
                 hit_filter = True
             if config.get('hatespeech', 0) > 0 and hatespeech_proba >= config.get('hatespeech', 0):
                 if isinstance(message, ChatMessage):
-                    await message.reply(embed=EMBED_FILTERED(message.author, 'Hate Speech'),private=True)
+                    await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.hatespeech')),private=True)
                 await message.delete()
                 hit_filter = True
             if max(toxicity_proba, hatespeech_proba) >= 50:
@@ -631,7 +693,7 @@ class ModerationModule(Module):
                 filter = self.get_filter(message.server_id)
                 if filter.contains_profanity(message.content):
                     if isinstance(message, ChatMessage):
-                        await message.reply(embed=EMBED_FILTERED(message.author, 'Blacklisted Word'),private=True)
+                        await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.blacklist')),private=True)
                     await message.delete()
                     if logs_channel is not None:
                         await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
@@ -648,7 +710,7 @@ class ModerationModule(Module):
                             continue
                         if re.search(r'.+(.(jpe?g?|jif|jfif?|png|gif|bmp|dib|webp|tiff?|raw|arw|cr2|nrw|k25|heif|heic|indd?|indt|jp2|j2k|jpf|jpx|jpm|mj2|svgz?|ai|eps))', link):
                             if isinstance(message, ChatMessage):
-                                await message.reply(embed=EMBED_FILTERED(message.author, 'Only trusted users are permitted to post links containing images'), private=True)
+                                await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.trusted.image')), private=True)
                             await message.delete()
                             return True
                         try:
@@ -690,7 +752,7 @@ class ModerationModule(Module):
                                                 break
                                 if blocked is True:
                                     if isinstance(message, ChatMessage):
-                                        await message.reply(embed=EMBED_FILTERED(message.author, 'Only trusted users are permitted to post links containing images'), private=True)
+                                        await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.trusted.image')), private=True)
                                     await message.delete()
                                     return True
                         except:

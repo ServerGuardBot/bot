@@ -10,9 +10,12 @@ languages: dict = {}
 loadedLanguages: dict = {}
 loaded = False
 
-async def translate(locale, key, values: dict):
+async def translate(locale: str, key: str, values: dict=None):
+    global loaded
     while not loaded:
         await asyncio.sleep(.1)
+    global languages
+    global loadedLanguages
     lang = loadedLanguages.get(locale, loadedLanguages.get('en', {}))
     translation = lang.get(key, loadedLanguages.get('en', {}).get(key))
     if translation:
@@ -20,12 +23,20 @@ async def translate(locale, key, values: dict):
         if values:
             for index in values.keys():
                 item = values[index]
-                res = re.sub(rf'{{\s*{index}\s*}}', item)
+                res = re.sub(rf'{{\s*{index}\s*}}', item, res)
         return res
     else:
         raise Exception(f'The key "{key}" does not exist in locale "{locale}" or the "en" locale')
 
+async def getLanguages():
+    global loaded
+    while not loaded:
+        await asyncio.sleep(.1)
+    global languages
+    return languages
+
 def loadLanguages():
+    global loaded
     global languages
     global loadedLanguages
     lang_req = requests.get(LOCALIZATION_BASE + 'languages.json')
@@ -36,7 +47,7 @@ def loadLanguages():
         except Exception as e:
             print(f'WARNING: languages.json file contains invalid JSON, "{str(e)}"')
     
-    for locale in languages.keys():
+    for locale in [key for key in languages.keys()]:
         req = requests.get(LOCALIZATION_BASE + f'/bot/{locale}.json')
         if req.status_code == 200:
             try:
@@ -44,15 +55,17 @@ def loadLanguages():
             except Exception as e:
                 print(f'WARNING: bot/{locale}.json file contains invalid JSON, "{str(e)}"')
         else:
-            print(f'WARNING: bot/{locale}.json file missing')
+            print(f'WARNING: bot/{locale}.json file missing, will remove from list')
+            del languages[locale]
+    loaded = True
 
 def reloadLangs():
     global timer
     loadLanguages()
-    timer = Timer(10, reloadLangs)
+    timer = Timer(30, reloadLangs)
     timer.start()
 
 loadLanguages()
 
-timer = Timer(10, reloadLangs)
+timer = Timer(30, reloadLangs)
 timer.start()
