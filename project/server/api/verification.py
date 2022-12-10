@@ -189,7 +189,8 @@ class VerifyUser(MethodView):
                 if logs_channel is not None:
                     await send_embed(logs_channel, embed=user_evaluator.generate_embed(
                         await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
-                        False
+                        False,
+                        "None-Browser Attempt"
                     ))
                 return jsonify({
                     'message': 'Please use a browser to verify with us!'
@@ -204,6 +205,14 @@ class VerifyUser(MethodView):
             if block_tor is 1:
                 exit_nodes = get_tor_exit_nodes()
                 if ip in exit_nodes:
+                    # Reject due to tor detected
+                    if logs_channel is not None:
+                        await send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                            await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
+                            False,
+                            "Tor Block"
+                        ))
+
                     return jsonify({
                         'message': 'This server blocks verification from tor exit nodes'
                     }), 403
@@ -213,7 +222,8 @@ class VerifyUser(MethodView):
                 if logs_channel is not None:
                     await send_embed(logs_channel, embed=user_evaluator.generate_embed(
                         await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
-                        False
+                        False,
+                        "Rate Limited"
                     ))
                 return jsonify({
                     'message': 'You are verifying too often in this server.'
@@ -229,12 +239,13 @@ class VerifyUser(MethodView):
                     })
                     using_vpn = data.get('proxy') == 'yes'
                     risk = data.get('risk') or 0
-                    if risk >= 67 or (risk >= 34 and using_vpn):
+                    if risk >= 75:
                         # Block the verification
                         if logs_channel is not None:
                             await send_embed(logs_channel, embed=user_evaluator.generate_embed(
                                 await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
-                                False
+                                False,
+                                "[APC] Dangerous IP"
                             ))
                         return jsonify({
                             'message': 'Dangerous IP address identified by Advanced Proxy Check'
@@ -256,7 +267,8 @@ class VerifyUser(MethodView):
                     if logs_channel is not None:
                         await send_embed(logs_channel, embed=user_evaluator.generate_embed(
                             await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
-                            False
+                            False,
+                            "Account Check"
                         ))
                     return jsonify({
                         'message': 'Your account is linked to a previously banned member of this server'
@@ -274,7 +286,8 @@ class VerifyUser(MethodView):
                 if logs_channel is not None:
                     await send_embed(logs_channel, user_evaluator.generate_embed(
                         await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
-                        False
+                        False,
+                        "IP Check"
                     ))
                 await bot_api.session.close()
                 return jsonify({
@@ -295,7 +308,8 @@ class VerifyUser(MethodView):
                     if logs_channel is not None:
                         await send_embed(logs_channel, embed=user_evaluator.generate_embed(
                             await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
-                            False
+                            False,
+                            "IP Check"
                         ))
                     return jsonify({
                         'message': 'Your IP is linked to a previously banned member of this server'

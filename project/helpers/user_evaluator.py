@@ -71,7 +71,7 @@ async def evaluate_user(guild_id: str, user_id: str, connections: str):
         'Score': round((total_score / total_evaled) * 100)
     }
 
-def generate_embed(evaluation: dict, passed_check: bool=None):
+def generate_embed(evaluation: dict, passed_check: bool=None, fail_reason: str=""):
     em: Embed = Embed(
         title=f'{evaluation["Name"]}\'s Evaluation',
         url=f'https://guilded.gg/profile/{evaluation["User_Id"]}',
@@ -94,6 +94,8 @@ def generate_embed(evaluation: dict, passed_check: bool=None):
 
     if passed_check is not None:
         em.add_field(name='Passed Check', value=passed_check and 'Yes' or 'No', inline=False)
+        if passed_check is False:
+            em.add_field(name='Failure Reason', value=fail_reason, inline=False)
 
     return em
 

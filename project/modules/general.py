@@ -1,9 +1,10 @@
+from multiprocessing.managers import BaseManager
 import re
 from project.modules.base import Module
 from project.modules.moderation import reset_filter_cache
 from project.helpers.embeds import *
 from project.helpers.Cache import Cache
-from project import bot_config
+from project import bot_config, managers
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
 from guilded import Embed, BulkMemberRolesUpdateEvent, BotAddEvent, BotRemoveEvent, ChatMessage, http
@@ -291,6 +292,23 @@ class GeneralModule(Module):
                 .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80'))
 
         analytics.cog = cog
+
+        @bot.command()
+        async def reload(_, ctx: commands.Context):
+            """Bot creator-only command to reload the bot"""
+            if ctx.author.id == 'm6YxwpQd':
+                await ctx.reply('Reloading bot...')
+
+                for manager in managers:
+                    manager: BaseManager
+                    try:
+                        manager.shutdown()
+                    except Exception as e:
+                        print('Failed to shut down manager:', str(e))
+                
+                raise SystemExit(1)
+        
+        reload.cog = cog
 
         @bot.command()
         async def language(_, ctx: commands.Context, lang: str):

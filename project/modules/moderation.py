@@ -434,7 +434,7 @@ class ModerationModule(Module):
                     colour=Colour.gilded(),
                     url=user.profile_url
                 ) \
-                .set_thumbnail(url=user.avatar.aws_url)
+                .set_thumbnail(url=user.avatar != None and user.avatar.aws_url or IMAGE_DEFAULT_AVATAR)
                 em.add_field(name=await translate(curLang, 'userinfo.roles'), value=', '.join([f'<@{role}>' for role in role_ids]), inline=False)
                 em.add_field(name=await translate(curLang, 'userinfo.creation'), value=user.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n' + f':warning: {await translate(curLang, "userinfo.recent")}' or ''))
                 em.add_field(name=await translate(curLang, 'userinfo.joined'), value=user.joined_at.strftime("%b %d %Y at %H:%M %p %Z"))
