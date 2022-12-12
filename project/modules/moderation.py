@@ -7,7 +7,7 @@ from project.helpers.translator import translate
 from project.modules.base import Module
 from project import bot_config, bot_api, malicious_urls
 from guilded.ext import commands
-from guilded import Embed, Colour, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
+from guilded import Embed, Colour, Forbidden, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
 from humanfriendly import parse_timespan, format_timespan
 from better_profanity import Profanity
 from unidecode import unidecode
@@ -622,7 +622,13 @@ class ModerationModule(Module):
                 if repeats(message.content):
                     if isinstance(message, ChatMessage):
                         await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.duplicate_text')), private=True)
-                    await message.delete()
+                    try:
+                        await message.delete()
+                    except Forbidden:
+                        await message.reply(embed=EMBED_DENIED(
+                            title='Permissions Error',
+                            description='Server Guard encountered a permissions error while trying to delete the messages.'
+                        ), private=True)
                     return True
 
             if config.get('url_filter', 0) == 1:
@@ -630,7 +636,13 @@ class ModerationModule(Module):
                     if url in message.content:
                         if isinstance(message, ChatMessage):
                             await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.malicious_url')), private=True)
-                        await message.delete()
+                        try:
+                            await message.delete()
+                        except Forbidden:
+                            await message.reply(embed=EMBED_DENIED(
+                                title='Permissions Error',
+                                description='Server Guard encountered a permissions error while trying to delete the messages.'
+                            ), private=True)
                         if logs_channel is not None:
                             await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
                                 title='Malicious URL Detected',
@@ -647,7 +659,13 @@ class ModerationModule(Module):
                         continue
                     if isinstance(message, ChatMessage):
                         await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.invite_link')), private=True)
-                    await message.delete()
+                    try:
+                        await message.delete()
+                    except Forbidden:
+                        await message.reply(embed=EMBED_DENIED(
+                            title='Permissions Error',
+                            description='Server Guard encountered a permissions error while trying to delete the messages.'
+                        ), private=True)
                     if logs_channel is not None:
                         await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
                             title='Invite Linked Detected',
@@ -671,12 +689,24 @@ class ModerationModule(Module):
             if config.get('toxicity', 0) > 0 and toxicity_proba >= config.get('toxicity', 0):
                 if isinstance(message, ChatMessage):
                     await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.toxicity')),private=True)
-                await message.delete()
+                try:
+                    await message.delete()
+                except Forbidden:
+                    await message.reply(embed=EMBED_DENIED(
+                        title='Permissions Error',
+                        description='Server Guard encountered a permissions error while trying to delete the messages.'
+                    ), private=True)
                 hit_filter = True
             if config.get('hatespeech', 0) > 0 and hatespeech_proba >= config.get('hatespeech', 0):
                 if isinstance(message, ChatMessage):
                     await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.hatespeech')),private=True)
-                await message.delete()
+                try:
+                    await message.delete()
+                except Forbidden:
+                    await message.reply(embed=EMBED_DENIED(
+                        title='Permissions Error',
+                        description='Server Guard encountered a permissions error while trying to delete the messages.'
+                    ), private=True)
                 hit_filter = True
             if max(toxicity_proba, hatespeech_proba) >= 50:
                 if logs_channel is not None:
@@ -694,7 +724,13 @@ class ModerationModule(Module):
                 if filter.contains_profanity(message.content):
                     if isinstance(message, ChatMessage):
                         await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.blacklist')),private=True)
-                    await message.delete()
+                    try:
+                        await message.delete()
+                    except Forbidden:
+                        await message.reply(embed=EMBED_DENIED(
+                            title='Permissions Error',
+                            description='Server Guard encountered a permissions error while trying to delete the messages.'
+                        ), private=True)
                     if logs_channel is not None:
                         await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
                             title='Blacklisted Word Filter Triggered',
@@ -711,7 +747,13 @@ class ModerationModule(Module):
                         if re.search(r'.+(.(jpe?g?|jif|jfif?|png|gif|bmp|dib|webp|tiff?|raw|arw|cr2|nrw|k25|heif|heic|indd?|indt|jp2|j2k|jpf|jpx|jpm|mj2|svgz?|ai|eps))', link):
                             if isinstance(message, ChatMessage):
                                 await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.trusted.image')), private=True)
-                            await message.delete()
+                            try:
+                                await message.delete()
+                            except Forbidden:
+                                await message.reply(embed=EMBED_DENIED(
+                                    title='Permissions Error',
+                                    description='Server Guard encountered a permissions error while trying to delete the messages.'
+                                ), private=True)
                             return True
                         try:
                             head_req = requests.head(link, headers={
@@ -753,7 +795,13 @@ class ModerationModule(Module):
                                 if blocked is True:
                                     if isinstance(message, ChatMessage):
                                         await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.trusted.image')), private=True)
-                                    await message.delete()
+                                    try:
+                                        await message.delete()
+                                    except Forbidden:
+                                        await message.reply(embed=EMBED_DENIED(
+                                            title='Permissions Error',
+                                            description='Server Guard encountered a permissions error while trying to delete the messages.'
+                                        ), private=True)
                                     return True
                         except:
                             pass
@@ -830,9 +878,15 @@ class ModerationModule(Module):
                     cached_spam = []
                 if len(cached_spam) >= config.get('automod_spam'):
                     await message.reply(embed=EMBED_FILTERED(message.author, 'Talking too fast!'), private=True)
-                    await message.delete()
-                    for item in cached_spam:
-                        await item.delete()
+                    try:
+                        await message.delete()
+                        for item in cached_spam:
+                            await item.delete()
+                    except Forbidden:
+                        await message.reply(embed=EMBED_DENIED(
+                            title='Permissions Error',
+                            description='Server Guard encountered a permissions error while trying to delete the messages.'
+                        ), private=True)
                     cached_spam = []
                     spam_cache.set(f'{message.guild.id}/{message.author_id}', cached_spam)
                     return
