@@ -163,14 +163,7 @@ async def run_analytics_loop():
         requests.post('http://localhost:5000/analytics/servers', headers={
             'authorization': bot_config.SECRET_KEY
         })
-        users = 0
-        for server in client.servers:
-            if server.member_count == 0:
-                await server.fill_members()
-            users += server.member_count
-        requests.post('http://localhost:5000/analytics/users', json={
-            'users': users
-        }, headers={
+        requests.post('http://localhost:5000/analytics/users', headers={
             'authorization': bot_config.SECRET_KEY
         })
         await asyncio.sleep(60 * 60) # Only runs once an hour

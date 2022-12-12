@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
 from project import app, db
+from sqlalchemy import func
 
 from project.server.api.auth import get_user_auth
 from project.server.models import BotData, AnalyticsItem, Guild
@@ -26,6 +27,7 @@ class AnalyticsDashResource(MethodView):
         userHistorical: list = AnalyticsItem.query.filter(AnalyticsItem.date >= dt) \
             .filter(AnalyticsItem.key == 'users') \
             .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
+            .filter(AnalyticsItem.value > 0) \
             .all()
         
         largestServers = db.session.query(Guild) \
@@ -68,6 +70,23 @@ class NoneServersResource(MethodView):
         
         return jsonify([guild.guild_id for guild in guilds]), 200
 
+class ActiveServersResource(MethodView):
+    """ Active Servers Resource """
+    async def get(self):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        
+        guilds = db.session.query(Guild) \
+            .filter(Guild.members > 0) \
+            .filter(Guild.active == True) \
+            .order_by(Guild.members.desc()) \
+            .limit(300) \
+            .all()
+        
+        return jsonify([guild.guild_id for guild in guilds]), 200
+
 class UserAnalyticsResource(MethodView):
     """ User Analytics Resource """
     async def get(self, year: int=None, month: int=None, day: int=None, hour: int=None):
@@ -105,7 +124,9 @@ class UserAnalyticsResource(MethodView):
             return 'Forbidden.', 403
         
         dt = AnalyticsItem.get_date(round_to='hour')
-        value = request.get_json().get('users')
+        value = db.session.query(func.sum(Guild.members)) \
+            .filter(Guild.active == True) \
+            .scalar()
 
         item: AnalyticsItem = AnalyticsItem.query.filter(AnalyticsItem.date == dt) \
             .filter(AnalyticsItem.key == 'users') \
@@ -113,6 +134,8 @@ class UserAnalyticsResource(MethodView):
             .first()
         if item is None:
             item = AnalyticsItem('BOT INTERNAL', 'users', value, dt)
+        else:
+            item.value = value
 
         db.session.add(item)
         db.session.commit()
@@ -272,6 +295,7 @@ data_blueprint.add_url_rule('/analytics/servers/dash/<days>', view_func=Analytic
 
 data_blueprint.add_url_rule('/analytics/servers/largest', view_func=LargestServersResource.as_view('largest_servers'))
 data_blueprint.add_url_rule('/analytics/servers/unindexed', view_func=NoneServersResource.as_view('none_servers'))
+data_blueprint.add_url_rule('/analytics/servers/active', view_func=ActiveServersResource.as_view('active_servers'))
 
 data_blueprint.add_url_rule('/analytics/servers', view_func=ServerAnalyticsResource.as_view('server_analytics'))
 data_blueprint.add_url_rule('/analytics/servers/<year>', view_func=ServerAnalyticsResource.as_view('server_analytics_y'))
