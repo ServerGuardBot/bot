@@ -221,7 +221,6 @@ class VerificationModule(Module):
                 await self.send_welcome_embed(event.server, event.member)
         bot.join_listeners.append(on_member_join)
 
-        @bot.event
         async def on_message_reaction_add(event: MessageReactionAddEvent):
             if event.member.bot:
                 return
@@ -240,6 +239,7 @@ class VerificationModule(Module):
                         if int(verified_role) in member_roles:
                             return
                     await self.initiate_verification(event.server, member, event.channel)
+        bot.reaction_add_listeners.append(on_message_reaction_add)
 
         async def on_ban_create(event: BanCreateEvent):
             if event.ban.user.bot:

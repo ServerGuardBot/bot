@@ -29,6 +29,8 @@ pycryptodome = "*"
 protobuf = "<=3.20"
 tensorflow = "*"
 unidecode = "*"
+geoip2 = "*"
+user-agents = "*"
 
 [dev-packages]
 

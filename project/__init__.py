@@ -1,6 +1,6 @@
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
+from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MessageReactionAddEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
 from guilded.ext import commands
 from nsfw_detector import predict as nsfw_detect
 from zipfile import ZipFile
@@ -121,6 +121,7 @@ class BotClient(commands.Bot):
     member_role_update_listeners: list = []
     ban_create_listeners: list = []
     ban_delete_listeners: list = []
+    reaction_add_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
 
@@ -160,6 +161,16 @@ def load_malicious_url_db():
 async def run_analytics_loop():
     while True:
         requests.post('http://localhost:5000/analytics/servers', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+        users = 0
+        for server in client.servers:
+            if server.member_count == 0:
+                await server.fill_members()
+            users += server.member_count
+        requests.post('http://localhost:5000/analytics/users', json={
+            'users': users
+        }, headers={
             'authorization': bot_config.SECRET_KEY
         })
         await asyncio.sleep(60 * 60) # Only runs once an hour
@@ -298,6 +309,14 @@ async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
             await callback(event)
         except Exception as e:
             print('Failed to run member role update listener:', e)
+
+@client.event
+async def on_message_reaction_add(event: MessageReactionAddEvent):
+    for callback in client.reaction_add_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run reaction add listener:', e)
 
 if not os.getenv('MIGRATING_DB', '0') == '1':
     print('Registering Modules')

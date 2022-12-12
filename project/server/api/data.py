@@ -23,6 +23,11 @@ class AnalyticsDashResource(MethodView):
             .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
             .all()
         
+        userHistorical: list = AnalyticsItem.query.filter(AnalyticsItem.date >= dt) \
+            .filter(AnalyticsItem.key == 'users') \
+            .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
+            .all()
+        
         largestServers = db.session.query(Guild) \
             .filter(Guild.active == True) \
             .filter(Guild.members > 0) \
@@ -35,6 +40,10 @@ class AnalyticsDashResource(MethodView):
                 'time': item.date.timestamp(),
                 'value': item.value
             } for item in serverHistorical],
+            'users': [{
+                'time': item.date.timestamp(),
+                'value': item.value
+            } for item in userHistorical],
             'largestServers': [{
                 'id': server.guild_id,
                 'name': server.name,
@@ -58,6 +67,60 @@ class NoneServersResource(MethodView):
             .all()
         
         return jsonify([guild.guild_id for guild in guilds]), 200
+
+class UserAnalyticsResource(MethodView):
+    """ User Analytics Resource """
+    async def get(self, year: int=None, month: int=None, day: int=None, hour: int=None):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        
+        if hour == None:
+            hour = datetime.now().hour
+        if day == None:
+            day = datetime.now().day
+        if month == None:
+            month = datetime.now().month
+        if year == None:
+            year = datetime.now().year
+        dt = datetime(year, month, day, hour, 0)
+
+        item: AnalyticsItem = AnalyticsItem.query.filter(AnalyticsItem.date == dt) \
+            .filter(AnalyticsItem.key == 'users') \
+            .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
+            .first()
+        
+        if item is not None:
+            return jsonify({
+                'value': item.value
+            }), 200
+        else:
+            return 'Not Found', 404
+
+    async def post(self):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        
+        dt = AnalyticsItem.get_date(round_to='hour')
+        value = request.get_json().get('users')
+
+        item: AnalyticsItem = AnalyticsItem.query.filter(AnalyticsItem.date == dt) \
+            .filter(AnalyticsItem.key == 'users') \
+            .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
+            .first()
+        if item is None:
+            item = AnalyticsItem('BOT INTERNAL', 'users', value, dt)
+
+        db.session.add(item)
+        db.session.commit()
+
+        return jsonify({
+            'time': dt.timestamp(),
+            'value': value
+        }), 201
 
 class ServerAnalyticsResource(MethodView):
     """ Server Analytics Resource """
@@ -215,3 +278,9 @@ data_blueprint.add_url_rule('/analytics/servers/<year>', view_func=ServerAnalyti
 data_blueprint.add_url_rule('/analytics/servers/<year>/<month>', view_func=ServerAnalyticsResource.as_view('server_analytics_ym'))
 data_blueprint.add_url_rule('/analytics/servers/<year>/<month>/<day>', view_func=ServerAnalyticsResource.as_view('server_analytics_ymd'))
 data_blueprint.add_url_rule('/analytics/servers/<year>/<month>/<day>/<hour>', view_func=ServerAnalyticsResource.as_view('server_analytics_ymdh'))
+
+data_blueprint.add_url_rule('/analytics/users', view_func=UserAnalyticsResource.as_view('user_analytics'))
+data_blueprint.add_url_rule('/analytics/users/<year>', view_func=UserAnalyticsResource.as_view('user_analytics_y'))
+data_blueprint.add_url_rule('/analytics/users/<year>/<month>', view_func=UserAnalyticsResource.as_view('user_analytics_ym'))
+data_blueprint.add_url_rule('/analytics/users/<year>/<month>/<day>', view_func=UserAnalyticsResource.as_view('user_analytics_ymd'))
+data_blueprint.add_url_rule('/analytics/users/<year>/<month>/<day>/<hour>', view_func=UserAnalyticsResource.as_view('user_analytics_ymdh'))

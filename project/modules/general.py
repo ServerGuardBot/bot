@@ -7,7 +7,7 @@ from project.helpers.Cache import Cache
 from project import bot_config, managers
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
-from guilded import Embed, BulkMemberRolesUpdateEvent, BotAddEvent, BotRemoveEvent, ChatMessage, http
+from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote, http
 from datetime import datetime
 from humanfriendly import format_timespan
 from project.helpers.translator import getLanguages, translate
@@ -24,6 +24,7 @@ channel = commands.ChatChannelConverter()
 role = commands.RoleConverter()
 
 xp_cache = Cache(60)
+login_cache = Cache(60)
 
 class CustomHelpCommand(HelpCommand):
     def __init__(self, **options):
@@ -1222,7 +1223,7 @@ class GeneralModule(Module):
             user_info = user_data_req.json()
             curLang = user_info.get('language', 'en')
 
-            url = re.search("(?P<url>https?://[^\s]+)", image).group("url")
+            url = re.search("(?P<url>https?://[^\s\]\[]+)", image).group("url")
 
             if url:
                 result = requests.patch(f'http://localhost:5000/guilddata/{ctx.server.id}/cfg/welcome_image', json={
@@ -1429,24 +1430,30 @@ class GeneralModule(Module):
                         await message.reply(embed=item['response'])
             if message.channel_id == LOGIN_CHANNEL_ID:
                 # Do login stuff
-                result = requests.post(f'http://localhost:5000/auth/status/{message.content}/{message.author_id}', headers={
+                await message.delete() # Delete it first so there is minimal time-frame for others to see the code
+                status_result = requests.get(f'http://localhost:5000/auth/status/{message.content}', headers={
                     'authorization': bot_config.SECRET_KEY
                 })
-                if result.status_code == 200:
+                if status_result.status_code == 200:
+                    login_cache.set(message.author_id, message.content)
+                    data: dict = status_result.json()
                     em = Embed(
-                        title='Success',
-                        description='You should now be logged in on your browser. If you closed the login page before this then you will have to login again.',
+                        title='Verify Login',
+                        description=f'{message.author.mention}, Are you trying to log in from **{data.get("location")}** on **{data.get("browser")} {data.get("platform")}?** If so, please react to this message with a :white_check_mark:',
                         colour=Colour.gilded()
                     )
-                    await message.reply(embed=em, private=True, delete_after=10)
+                    resp = await message.reply(embed=em, private=True, delete_after=60)
+                    await resp.add_reaction(Emote(state=bot.http, data={
+                        'id': 90002171,
+                        'name': 'white_check_mark'
+                    })) # 90002171 = white_check_mark
                 else:
                     em = Embed(
                         title='Failure',
-                        description='Please submit a valid login code here, and remember not to post anything here that other users tell you to!',
+                        description=f'{message.author.mention}, Please submit a valid login code here, and remember not to post anything here that other users tell you to!',
                         colour=Colour.gilded()
                     )
                     await message.reply(embed=em, private=True, delete_after=10)
-                await message.delete()
             if xp_cache.get(id):
                 return # They cannot gain xp at this point in time
             guild_data: dict = self.get_guild_data(message.server_id)
@@ -1467,6 +1474,34 @@ class GeneralModule(Module):
                     xp_cache.set(id, True)
                     await member.award_xp(gain)
         self.bot.message_listeners.append(on_message)
+
+        async def on_message_reaction_add(event: MessageReactionAddEvent):
+            if event.member.bot:
+                return
+            if event.emote.id == 90002171:
+                code = login_cache.get(event.user_id)
+                if code is not None:
+                    message = await event.channel.fetch_message(event.message_id)
+                    await message.delete()
+
+                    result = requests.post(f'http://localhost:5000/auth/status/{code}/{message.author_id}', headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                    if result.status_code == 200:
+                        em = Embed(
+                            title='Success',
+                            description=f'{event.member.mention}, You should now be logged in on your browser. If you closed the login page before this then you will have to login again.',
+                            colour=Colour.gilded()
+                        )
+                        await event.channel.send(embed=em, private=True, delete_after=10)
+                    else:
+                        em = Embed(
+                            title='Failure',
+                            description=f'{event.member.mention}, This login prompt has expired, please reinput your code or generate a new one.',
+                            colour=Colour.gilded()
+                        )
+                        await event.channel.send(embed=em, private=True, delete_after=10)
+        bot.reaction_add_listeners.append(on_message_reaction_add)
 
         @bot.event
         async def on_bot_remove(event: BotRemoveEvent):

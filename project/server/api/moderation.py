@@ -314,7 +314,7 @@ class ExpiredStatuses(MethodView):
         bot_api.token = app.config.get('GUILDED_BOT_TOKEN')
         bot_api.session = aiohttp.ClientSession()
 
-        statuses = GuildUserStatus.query.filter(func.DATE(GuildUserStatus.ends_at) >= date.today()).paginate(per_page=50)
+        statuses = GuildUserStatus.query.filter(datetime.now() >= GuildUserStatus.ends_at).paginate(per_page=50)
         for _ in statuses.iter_pages():
             contents = statuses.items
             for status in contents:
