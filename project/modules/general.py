@@ -1484,7 +1484,7 @@ class GeneralModule(Module):
                     message = await event.channel.fetch_message(event.message_id)
                     await message.delete()
 
-                    result = requests.post(f'http://localhost:5000/auth/status/{code}/{message.author_id}', headers={
+                    result = requests.post(f'http://localhost:5000/auth/status/{code}/{event.user_id}', headers={
                         'authorization': bot_config.SECRET_KEY
                     })
                     if result.status_code == 200:

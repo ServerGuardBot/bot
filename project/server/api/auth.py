@@ -337,19 +337,19 @@ class LoginStatusResource(MethodView):
         if status is None:
             return 'Not Found', 404
         else:
-            if not isinstance(status, str):
+            if status.get('user') == None:
                 if auth == app.config.get('SECRET_KEY'):
                     return jsonify(status), 200 # If it's the bot getting this, then we return the status object
                 return 'Waiting', 204
             else:
-                post_data: dict = request.get_json()
-                if post_data.get('lock') != status.lock:
+                post_data: dict = request.args
+                if post_data.get('lock') != status.get('lock'):
                     return 'Forbidden', 403
                 code_cache.remove(code)
 
                 return jsonify({
-                    'auth': AuthToken.generate(status),
-                    'refresh': RefreshToken.generate(status)
+                    'auth': AuthToken.generate(status.get('user')),
+                    'refresh': RefreshToken.generate(status.get('user'))
                 }), 200
     async def post(self, code, user_id):
         auth = request.headers.get('authorization')
@@ -357,8 +357,11 @@ class LoginStatusResource(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        if not isinstance(code_cache.get(code), str):
-            code_cache.set(code, user_id)
+        if isinstance(code_cache.get(code), dict):
+            code_cache.set(code, {
+                'user': user_id,
+                'lock': code_cache.get(code).get('lock')
+            })
             return 'Success', 200
         else:
             return 'Not Found', 404
