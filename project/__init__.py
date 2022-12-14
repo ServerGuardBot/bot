@@ -104,7 +104,7 @@ if not os.getenv('MIGRATING_DB', '0') == '1':
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-cors = CORS(app, send_wildcard=True, origins="https://serverguard.xyz", supports_credentials=True)
+cors = CORS(app, send_wildcard=True, origins=["https://serverguard.xyz", "http://localhost:8001"], supports_credentials=True)
 
 guild_cache = Cache()
 

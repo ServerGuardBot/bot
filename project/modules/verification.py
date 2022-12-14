@@ -114,13 +114,14 @@ class VerificationModule(Module):
             member_roles = await guilded_member.fetch_role_ids()
             if unverified_role:
                 if int(unverified_role) not in member_roles:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('You\'re already verified!'), private=True)
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(f'{ctx.author.mention}, You\'re already verified!'), private=True)
                     return
             elif verified_role:
                 if int(verified_role) in member_roles:
-                    await ctx.reply(embed=EMBED_COMMAND_ERROR('You\'re already verified!'), private=True)
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(f'{ctx.author.mention}, You\'re already verified!'), private=True)
                     return
 
+            await ctx.message.delete() # Delete the original message to prevent conversing
             await self.initiate_verification(ctx.server, guilded_member, ctx.channel)
         
         verify.cog = cog

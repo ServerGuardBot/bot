@@ -259,9 +259,18 @@ class VerifyUser(MethodView):
                     .filter(GuildUser.user_id != token.user_id) \
                     .filter(GuildUser.is_banned == True)
 
-                matching_socials = db.session.query(UserInfo) \
-                    .filter((UserInfo.roblox == user_info.roblox) | (UserInfo.twitter == user_info.twitter) | (UserInfo.youtube == user_info.youtube) | (UserInfo.steam == user_info.steam)) \
-                    .filter(UserInfo.user_id.in_(banned_users))
+                matching_socials = db.session.query(UserInfo)
+                
+                if user_info.roblox != None:
+                    matching_socials = matching_socials.filter(UserInfo.roblox == user_info.roblox)
+                if user_info.steam != None:
+                    matching_socials = matching_socials.filter(UserInfo.steam == user_info.steam)
+                if user_info.twitter != None:
+                    matching_socials = matching_socials.filter(UserInfo.twitter == user_info.twitter)
+                if user_info.youtube != None:
+                    matching_socials = matching_socials.filter(UserInfo.youtube == user_info.youtube)
+
+                matching_socials = matching_socials.filter(UserInfo.user_id.in_(banned_users))
 
                 if len(matching_socials.all()) > 0:
                     if logs_channel is not None:
