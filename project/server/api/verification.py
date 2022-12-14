@@ -294,7 +294,7 @@ class VerifyUser(MethodView):
             if len(matching_hashes) > 0: # We found another user who was banned with a matching IP, reject them
                 if logs_channel is not None:
                     await send_embed(logs_channel, user_evaluator.generate_embed(
-                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, encoder.encode(token.connections)),
+                        await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
                         False,
                         "IP Check"
                     ))

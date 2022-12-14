@@ -832,7 +832,7 @@ class ModerationModule(Module):
                     em.add_field(name='Before', value=event.before.content, inline=False)
                 em.add_field(name='After', value=event.after.content, inline=False)
                 em.set_thumbnail(url=member.avatar.aws_url)
-                await channel.send(embed=em)
+                await channel.send(embed=em, silent=True)
         
         bot.message_update_listeners.append(on_message_update)
 
@@ -857,7 +857,7 @@ class ModerationModule(Module):
                 em.add_field(name='ID', value=member.id)
                 em.add_field(name='Deleted message contents', value=event.message.content, inline=False)
                 em.set_thumbnail(url=member.avatar.aws_url)
-                await channel.send(embed=em)
+                await channel.send(embed=em, silent=True)
         
         bot.message_delete_listeners.append(on_message_delete)
 
