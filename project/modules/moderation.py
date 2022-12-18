@@ -5,7 +5,7 @@ from project.helpers.images import *
 from project.helpers.Cache import Cache
 from project.helpers.translator import translate
 from project.modules.base import Module
-from project import bot_config, bot_api, malicious_urls
+from project import bot_config, BotAPI, malicious_urls
 from guilded.ext import commands
 from guilded import Embed, Colour, Forbidden, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
 from humanfriendly import parse_timespan, format_timespan
@@ -191,64 +191,62 @@ class ModerationModule(Module):
         async def mute(_, ctx: commands.Context, target: str, timespan: str=None, *_reason):
             """[Moderator+] Mute a user"""
             await self.validate_permission_level(1, ctx)
-            user = await self.convert_member(ctx, target)
+            with BotAPI() as bot_api:
+                user = await self.convert_member(ctx, target)
 
-            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
-                'authorization': bot_config.SECRET_KEY
-            })
-            user_info = user_data_req.json()
-            curLang = user_info.get('language', 'en')
-
-            if user is None:
-                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
-                return
-
-            bot_api.session = aiohttp.ClientSession()
-
-            if await self.is_moderator(user):
-                await ctx.reply('This user is a moderator, I can\'t do that!')
-                return
-
-            guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
-                'authorization': bot_config.SECRET_KEY
-            })
-            guild_data: dict = guild_data_req.json()
-            config = guild_data.get('config', {})
-            logs_channel = config.get('action_logs_channel', config.get('logs_channel'))
-
-            reason = ' '.join(_reason)
-
-            if timespan is not None:
-                try:
-                    timespan = parse_timespan(timespan)
-                except:
-                    reason = timespan + ' ' + reason
-                    timespan = None
-            
-            if user is not None:
-                if config.get('mute_role'):
-                    await bot_api.assign_role_to_member(ctx.server.id, user.id, config['mute_role'])
-                requests.post(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/mute', json={
-                    'issuer': ctx.author.id,
-                    'reason': reason,
-                    'ends_at': timespan is not None and datetime.now().timestamp() + timespan or None
-                }, headers={
+                user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
                     'authorization': bot_config.SECRET_KEY
                 })
-                em = Embed(
-                    title = await translate(curLang, 'command.mute.title'),
-                    colour = Colour.orange()
-                )
-                em.add_field(name=await translate(curLang, 'log.user'), value=user.name)
-                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.name)
+                user_info = user_data_req.json()
+                curLang = user_info.get('language', 'en')
+
+                if user is None:
+                    await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
+                    return
+
+                if await self.is_moderator(user):
+                    await ctx.reply('This user is a moderator, I can\'t do that!')
+                    return
+
+                guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                guild_data: dict = guild_data_req.json()
+                config = guild_data.get('config', {})
+                logs_channel = config.get('action_logs_channel', config.get('logs_channel'))
+
+                reason = ' '.join(_reason)
+
                 if timespan is not None:
-                    em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
-                em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
-                await ctx.reply(embed=em)
-                if logs_channel:
-                    channel = await ctx.server.fetch_channel(logs_channel)
-                    await channel.send(embed=em)
-            await bot_api.session.close()
+                    try:
+                        timespan = parse_timespan(timespan)
+                    except:
+                        reason = timespan + ' ' + reason
+                        timespan = None
+                
+                if user is not None:
+                    if config.get('mute_role'):
+                        await bot_api.assign_role_to_member(ctx.server.id, user.id, config['mute_role'])
+                    requests.post(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/mute', json={
+                        'issuer': ctx.author.id,
+                        'reason': reason,
+                        'ends_at': timespan is not None and datetime.now().timestamp() + timespan or None
+                    }, headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                    em = Embed(
+                        title = await translate(curLang, 'command.mute.title'),
+                        colour = Colour.orange()
+                    )
+                    em.add_field(name=await translate(curLang, 'log.user'), value=user.name)
+                    em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.name)
+                    if timespan is not None:
+                        em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
+                    em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
+                    await ctx.reply(embed=em)
+                    if logs_channel:
+                        channel = await ctx.server.fetch_channel(logs_channel)
+                        await channel.send(embed=em)
         
         mute.cog = cog
         
@@ -256,32 +254,30 @@ class ModerationModule(Module):
         async def unmute(_, ctx: commands.Context, target: str):
             """[Moderator+] Unmute a user"""
             await self.validate_permission_level(1, ctx)
-            user = await self.convert_member(ctx, target)
+            with BotAPI() as bot_api:
+                user = await self.convert_member(ctx, target)
 
-            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
-                'authorization': bot_config.SECRET_KEY
-            })
-            user_info = user_data_req.json()
-            curLang = user_info.get('language', 'en')
+                user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                user_info = user_data_req.json()
+                curLang = user_info.get('language', 'en')
 
-            if user is None:
-                await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
-                return
+                if user is None:
+                    await ctx.reply(private=True, embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error.user')))
+                    return
 
-            bot_api.session = aiohttp.ClientSession()
+                guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                guild_data: dict = guild_data_req.json()
 
-            guild_data_req = requests.get(f'http://localhost:5000/guilddata/{ctx.server.id}', headers={
-                'authorization': bot_config.SECRET_KEY
-            })
-            guild_data: dict = guild_data_req.json()
-
-            if guild_data.get('config', {}).get('mute_role'):
-                await bot_api.remove_role_from_member(ctx.server.id, user.id, guild_data['config']['mute_role'])
-            requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/mute', headers={
-                'authorization': bot_config.SECRET_KEY
-            })
-            await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.unmute.success', {'mention': user.mention})))
-            await bot_api.session.close()
+                if guild_data.get('config', {}).get('mute_role'):
+                    await bot_api.remove_role_from_member(ctx.server.id, user.id, guild_data['config']['mute_role'])
+                requests.delete(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/mute', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.unmute.success', {'mention': user.mention})))
         
         unmute.cog = cog
         
@@ -475,46 +471,43 @@ class ModerationModule(Module):
 
             await self._update_guild_data(event.server_id)
 
-            bot_api.session = aiohttp.ClientSession()
+            with BotAPI() as bot_api:
+                guild_data_req = requests.get(f'http://localhost:5000/guilddata/{event.server_id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                guild_data: dict = guild_data_req.json()
+                config = guild_data.get('config', {})
 
-            guild_data_req = requests.get(f'http://localhost:5000/guilddata/{event.server_id}', headers={
-                'authorization': bot_config.SECRET_KEY
-            })
-            guild_data: dict = guild_data_req.json()
-            config = guild_data.get('config', {})
+                mute_req = requests.get(f'http://localhost:5000/moderation/{event.server_id}/{member.id}/mute', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
 
-            mute_req = requests.get(f'http://localhost:5000/moderation/{event.server_id}/{member.id}/mute', headers={
-                'authorization': bot_config.SECRET_KEY
-            })
+                if mute_req.status_code == 200:
+                    if config.get('mute_role'):
+                        await bot_api.assign_role_to_member(event.server_id, member.id, config['mute_role'])
+                
+                traffic_log_channel = config.get('traffic_logs_channel')
 
-            if mute_req.status_code == 200:
-                if config.get('mute_role'):
-                    await bot_api.assign_role_to_member(event.server_id, member.id, config['mute_role'])
-            
-            traffic_log_channel = config.get('traffic_logs_channel')
-
-            if traffic_log_channel is not None and traffic_log_channel != '':
-                created_time = member.created_at.timestamp()
-                diff = abs(datetime.now().timestamp() - created_time)
-                em = Embed(
-                    title=f'{member.name} joined the server',
-                    url=member.profile_url,
-                    colour=Colour.gilded()
-                )
-                em.set_thumbnail(url=member.avatar is not None and member.avatar.aws_url or IMAGE_DEFAULT_AVATAR)
-                em.add_field(name='User ID', value=member.id)
-                em.add_field(name='Account created', value=member.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
-                em.add_field(name='Account joined', value=member.joined_at.strftime("%b %d %Y at %H:%M %p %Z"))
-                if config.get('toxicity', 0) > 0:
-                    toxicity_proba_name = round(apply_filter('toxicity', [member.name])[0] * 100)
-                    em.add_field(name='Profile Toxicity', value=f'{toxicity_proba_name}%')
-                if config.get('hatespeech', 0) > 0:
-                    hatespeech_proba_name = round(apply_filter('hatespeech', [member.name])[0] * 100)
-                    em.add_field(name='Profile Hate-Speech', value=f'{hatespeech_proba_name}%')
-                channel = await bot.getch_channel(traffic_log_channel)
-                await channel.send(embed=em)
-
-            await bot_api.session.close()
+                if traffic_log_channel is not None and traffic_log_channel != '':
+                    created_time = member.created_at.timestamp()
+                    diff = abs(datetime.now().timestamp() - created_time)
+                    em = Embed(
+                        title=f'{member.name} joined the server',
+                        url=member.profile_url,
+                        colour=Colour.gilded()
+                    )
+                    em.set_thumbnail(url=member.avatar is not None and member.avatar.aws_url or IMAGE_DEFAULT_AVATAR)
+                    em.add_field(name='User ID', value=member.id)
+                    em.add_field(name='Account created', value=member.created_at.strftime("%b %d %Y at %H:%M %p %Z") + (diff <= 60 * 60 * 24 * 3 and '\n:warning: Recent' or ''))
+                    em.add_field(name='Account joined', value=member.joined_at.strftime("%b %d %Y at %H:%M %p %Z"))
+                    if config.get('toxicity', 0) > 0:
+                        toxicity_proba_name = round(apply_filter('toxicity', [member.name])[0] * 100)
+                        em.add_field(name='Profile Toxicity', value=f'{toxicity_proba_name}%')
+                    if config.get('hatespeech', 0) > 0:
+                        hatespeech_proba_name = round(apply_filter('hatespeech', [member.name])[0] * 100)
+                        em.add_field(name='Profile Hate-Speech', value=f'{hatespeech_proba_name}%')
+                    channel = await bot.getch_channel(traffic_log_channel)
+                    await channel.send(embed=em)
         
         bot.join_listeners.append(on_member_join)
 

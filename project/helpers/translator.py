@@ -43,11 +43,11 @@ def loadLanguages():
 
     if lang_req.status_code == 200:
         try:
-            languages = lang_req.json()
+            realLangs = lang_req.json()
         except Exception as e:
             print(f'WARNING: languages.json file contains invalid JSON, "{str(e)}"')
     
-    for locale in [key for key in languages.keys()]:
+    for locale in [key for key in realLangs.keys()]:
         req = requests.get(LOCALIZATION_BASE + f'/bot/{locale}.json')
         if req.status_code == 200:
             try:
@@ -56,7 +56,8 @@ def loadLanguages():
                 print(f'WARNING: bot/{locale}.json file contains invalid JSON, "{str(e)}"')
         else:
             print(f'WARNING: bot/{locale}.json file missing, will remove from list')
-            del languages[locale]
+            del realLangs[locale]
+    languages = realLangs # Only replace the language table once we know this is finalized to prevent unexpected scenarios
     loaded = True
 
 def reloadLangs():

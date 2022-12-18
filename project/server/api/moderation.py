@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
-from project import app, db
+from project import BotAPI, app, db
 from project.server.models import Guild, GuildUserStatus
 from guilded import Embed, Colour, http
 from sqlalchemy import func
@@ -310,69 +310,65 @@ class ExpiredStatuses(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
 
-        bot_api = http.HTTPClient()
-        bot_api.token = app.config.get('GUILDED_BOT_TOKEN')
-        bot_api.session = aiohttp.ClientSession()
+        with BotAPI() as bot_api:
+            statuses = GuildUserStatus.query.filter(datetime.now() >= GuildUserStatus.ends_at).paginate(per_page=50)
+            for _ in statuses.iter_pages():
+                contents = statuses.items
+                for status in contents:
+                    status: GuildUserStatus = status
+                    guild: Guild = Guild.query.filter_by(guild_id = status.guild_id).first()
+                    user = (await bot_api.get_user(status.user_id))['user']
+                    if status.type == 'ban':
+                        await bot_api.unban_server_member(status.guild_id, status.user_id)
+                        if guild.config.get('logs_channel'):
+                            em = Embed(
+                                title = 'Ban ended',
+                                colour = Colour.blue(),
+                                timestamp = datetime.now()
+                            )
+                            em.add_field(name='User', value=user['name'])
+                            em.add_field(name='Ban Reason', value=status.value['reason'])
+                            await bot_api.create_channel_message(guild.config['logs_channel'], payload={
+                                'embeds': [em.to_dict()]
+                            })
+                        requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/ban', headers={
+                            'authorization': app.config.get('SECRET_KEY')
+                        })
+                    elif status.type == 'mute':
+                        if guild.config.get('mute_role'):
+                            await bot_api.remove_role_from_member(status.guild_id, status.user_id, guild.config['mute_role'])
+                        if guild.config.get('logs_channel'):
+                            em = Embed(
+                                title = 'Mute ended',
+                                colour = Colour.blue(),
+                                timestamp = datetime.now()
+                            )
+                            em.add_field(name='User', value=user['name'])
+                            em.add_field(name='Mute Reason', value=status.value['reason'])
+                            await bot_api.create_channel_message(guild.config['logs_channel'], payload={
+                                'embeds': [em.to_dict()]
+                            })
+                        requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/mute', headers={
+                            'authorization': app.config.get('SECRET_KEY')
+                        })
+                    elif status.type == 'warning':
+                        if guild.config.get('logs_channel'):
+                            em = Embed(
+                                title = 'Warning ended',
+                                colour = Colour.blue(),
+                                timestamp = datetime.now()
+                            )
+                            em.add_field(name='User', value=user['name'])
+                            em.add_field(name='Warning Reason', value=status.value['reason'])
+                            await bot_api.create_channel_message(guild.config['logs_channel'], payload={
+                                'embeds': [em.to_dict()]
+                            })
+                        requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/warnings/{get_warning_id(status.guild_id, status.user_id, status.internal_id)}', headers={
+                            'authorization': app.config.get('SECRET_KEY')
+                        })
+                statuses.next()
 
-        statuses = GuildUserStatus.query.filter(datetime.now() >= GuildUserStatus.ends_at).paginate(per_page=50)
-        for _ in statuses.iter_pages():
-            contents = statuses.items
-            for status in contents:
-                status: GuildUserStatus = status
-                guild: Guild = Guild.query.filter_by(guild_id = status.guild_id).first()
-                user = (await bot_api.get_user(status.user_id))['user']
-                if status.type == 'ban':
-                    await bot_api.unban_server_member(status.guild_id, status.user_id)
-                    if guild.config.get('logs_channel'):
-                        em = Embed(
-                            title = 'Ban ended',
-                            colour = Colour.blue(),
-                            timestamp = datetime.now()
-                        )
-                        em.add_field(name='User', value=user['name'])
-                        em.add_field(name='Ban Reason', value=status.value['reason'])
-                        await bot_api.create_channel_message(guild.config['logs_channel'], payload={
-                            'embeds': [em.to_dict()]
-                        })
-                    requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/ban', headers={
-                        'authorization': app.config.get('SECRET_KEY')
-                    })
-                elif status.type == 'mute':
-                    if guild.config.get('mute_role'):
-                        await bot_api.remove_role_from_member(status.guild_id, status.user_id, guild.config['mute_role'])
-                    if guild.config.get('logs_channel'):
-                        em = Embed(
-                            title = 'Mute ended',
-                            colour = Colour.blue(),
-                            timestamp = datetime.now()
-                        )
-                        em.add_field(name='User', value=user['name'])
-                        em.add_field(name='Mute Reason', value=status.value['reason'])
-                        await bot_api.create_channel_message(guild.config['logs_channel'], payload={
-                            'embeds': [em.to_dict()]
-                        })
-                    requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/mute', headers={
-                        'authorization': app.config.get('SECRET_KEY')
-                    })
-                elif status.type == 'warning':
-                    if guild.config.get('logs_channel'):
-                        em = Embed(
-                            title = 'Warning ended',
-                            colour = Colour.blue(),
-                            timestamp = datetime.now()
-                        )
-                        em.add_field(name='User', value=user['name'])
-                        em.add_field(name='Warning Reason', value=status.value['reason'])
-                        await bot_api.create_channel_message(guild.config['logs_channel'], payload={
-                            'embeds': [em.to_dict()]
-                        })
-                    requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/warnings/{get_warning_id(status.guild_id, status.user_id, status.internal_id)}', headers={
-                        'authorization': app.config.get('SECRET_KEY')
-                    })
-            statuses.next()
-    
-        await bot_api.session.close()
-        return 'Success', 200
+            return 'Success', 200
 
 moderation_blueprint.add_url_rule('/moderation/<guild_id>/<user_id>/warnings', view_func=UserWarnings.as_view('warnings'))
 moderation_blueprint.add_url_rule('/moderation/<guild_id>/<user_id>/warnings/<warn_id>', view_func=UserWarnings.as_view('warnings_id'))

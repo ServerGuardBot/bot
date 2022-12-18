@@ -76,7 +76,6 @@ class CustomHelpCommand(HelpCommand):
             key = f'{parent.name.lower()}.{key}'
             parent = parent.parent
         key = f'command.{key}'
-        print(key)
         return key
     
     async def add_bot_commands_formatting(self, commands, heading):
@@ -299,15 +298,8 @@ class GeneralModule(Module):
             """Bot creator-only command to reload the bot"""
             if ctx.author.id == 'm6YxwpQd':
                 await ctx.reply('Reloading bot...')
-
-                for manager in managers:
-                    manager: BaseManager
-                    try:
-                        manager.shutdown()
-                    except Exception as e:
-                        print('Failed to shut down manager:', str(e))
                 
-                raise SystemExit(1)
+                os.system('killall -KILL gunicorn') # Forcefully kill the bot no matter what state it is in
         
         reload.cog = cog
 

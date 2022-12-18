@@ -32,6 +32,7 @@ import sys
 import ssl
 import requests
 import csv
+import aiohttp
 
 ssl_context = ssl.create_default_context()
 # Sets up old and insecure TLSv1.
@@ -80,8 +81,22 @@ app.config.from_object(configs[app_settings])
 
 bot_config: project.config.BaseConfig = configs[app_settings] # A custom copy of the config for the bot side of things to access
 
-bot_api = http.HTTPClient()
-bot_api.token = app.config.get('GUILDED_BOT_TOKEN')
+class BotAPI():
+    api = None
+    def __init__(self):
+        pass
+
+    def __enter__(self):
+        api = http.HTTPClient()
+        api.token = app.config.get('GUILDED_BOT_TOKEN')
+        api.session = aiohttp.ClientSession()
+        self.api = api
+        return api
+    
+    def __exit__(self, type, value, traceback):
+        loop = asyncio.get_running_loop()
+        loop.create_task(self.api.session.close())
+        del self.api
 
 nsfw_model = None
 nsfw_loaded = False

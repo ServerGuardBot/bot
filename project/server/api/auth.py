@@ -13,7 +13,7 @@ from datetime import datetime
 from werkzeug.exceptions import Forbidden
 from flask import Blueprint, request, jsonify, make_response
 from flask.views import MethodView
-from project import app, db, get_shared_state, bot_api
+from project import app, db, get_shared_state, BotAPI
 from project.helpers.Cache import Cache
 
 from project.server.models import GuildUser, UserInfo, Guild, BlacklistedRefreshToken
@@ -29,7 +29,7 @@ code_cache = Cache(60*10, shared_dict) # Codes expire after 10 minutes
 shared_dict2, shared_lock2 = get_shared_state(port=35795, key=b"config_cache")
 config_cache = Cache(60*10, shared_dict2) # Config check caches expire after 10 minutes
 
-geoip_reader = geoip.Reader('/usr/share/GeoIP/GeoLite2-City.mmdb')
+#geoip_reader = geoip.Reader('/usr/share/GeoIP/GeoLite2-City.mmdb')
 
 class AuthToken:
     user_id: str
@@ -108,24 +108,25 @@ def is_guild_active(guild_id: str):
     return False
 
 async def handle_channel_config(server, value):
-    if str(value) == None:
-        raise Exception
-    elif str(value).strip() != '':
-        uuid.UUID(value) # This will error if it is not a valid UUID
-        cached = config_cache.get(f'channel/{value}')
-        if cached is not None:
-            if not cached:
-                raise Exception
-        else:
-            try:
-                await bot_api.get_channel(value) # Only check this if it is not a blank string
-                cached = True
-            except:
-                cached = False
-            config_cache.set(f'channel/{value}', cached)
-            if not cached:
-                raise Exception
-    return value
+    with BotAPI() as bot_api:
+        if str(value) == None:
+            raise Exception
+        elif str(value).strip() != '':
+            uuid.UUID(value) # This will error if it is not a valid UUID
+            cached = config_cache.get(f'channel/{value}')
+            if cached is not None:
+                if not cached:
+                    raise Exception
+            else:
+                try:
+                    await bot_api.get_channel(value) # Only check this if it is not a blank string
+                    cached = True
+                except:
+                    cached = False
+                config_cache.set(f'channel/{value}', cached)
+                if not cached:
+                    raise Exception
+        return value
 
 async def handle_role_config(server, value):
     if int(value) == None:
@@ -214,47 +215,46 @@ class ServerConfigResource(MethodView):
         else:
             return 'Forbidden', 403
     async def patch(self, guild_id: str):
-        auth = get_user_auth()
+        with BotAPI() as bot_api:
+            auth = get_user_auth()
 
-        guild_user: GuildUser = GuildUser.query \
-            .filter(GuildUser.guild_id == guild_id) \
-            .filter(GuildUser.user_id == auth) \
-            .first()
-        
-        if guild_user is not None and guild_user.permission_level > 2:
-            guild_data: Guild = Guild.query \
+            guild_user: GuildUser = GuildUser.query \
                 .filter(GuildUser.guild_id == guild_id) \
+                .filter(GuildUser.user_id == auth) \
                 .first()
             
-            if guild_data is None:
-                return 'Guild not in database', 400
-            else:
-                post_data: dict = request.get_json()
-                failures = {}
-                newValues = {}
-
-                bot_api.session = aiohttp.ClientSession()
-                for key in post_data.keys():
-                    handler = config_handlers.get(key)
-                    if handler is not None:
-                        try:
-                            guild_data.config[key] = await handler(guild_id, post_data.get(key))
-                            newValues[key] = guild_data.config.get(key)
-                        except Exception as e:
-                            failures[key] = str(e)
-                await bot_api.session.close()
-
-                if len(failures) == len(post_data):
-                    return jsonify({
-                        'failures': failures
-                    }), 400
+            if guild_user is not None and guild_user.permission_level > 2:
+                guild_data: Guild = Guild.query \
+                    .filter(GuildUser.guild_id == guild_id) \
+                    .first()
+                
+                if guild_data is None:
+                    return 'Guild not in database', 400
                 else:
-                    return jsonify({
-                        'failures': failures,
-                        'values': newValues
-                    }), 200
-        else:
-            return 'Forbidden', 403
+                    post_data: dict = request.get_json()
+                    failures = {}
+                    newValues = {}
+
+                    for key in post_data.keys():
+                        handler = config_handlers.get(key)
+                        if handler is not None:
+                            try:
+                                guild_data.config[key] = await handler(guild_id, post_data.get(key))
+                                newValues[key] = guild_data.config.get(key)
+                            except Exception as e:
+                                failures[key] = str(e)
+
+                    if len(failures) == len(post_data):
+                        return jsonify({
+                            'failures': failures
+                        }), 400
+                    else:
+                        return jsonify({
+                            'failures': failures,
+                            'values': newValues
+                        }), 200
+            else:
+                return 'Forbidden', 403
 
 class LoginResource(MethodView):
     """ Login Resource """

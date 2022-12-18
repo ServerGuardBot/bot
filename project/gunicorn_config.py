@@ -1,3 +1,4 @@
+import os
 from guilded.ext import commands
 from project import client, app, managers
 
@@ -6,6 +7,7 @@ import multiprocessing
 import asyncio
 
 preload_app = True
+proc_name = 'serverguard'
 
 def run():
     # Run the bot
@@ -17,7 +19,7 @@ def run():
         print('BOT CRASHED:', e)
     if did_crash is False:
         print('Bot was disconnected, restarting...')
-    raise SystemExit(1) # If the program exits, the service will just automatically restart anyway
+    os.system('killall -KILL gunicorn')
 
 thread = threading.Thread(target=run)
 
@@ -27,12 +29,6 @@ def on_starting(server):
     thread.start()
 
 def on_exit(server):
-    for manager in managers:
-        try:
-            manager.shutdown()
-        except Exception as e:
-            print('Failed to shut down manager:', str(e))
-    managers.clear()
     loop = client.loop
     print("Attempting to stop bot thread", flush=True)
     loop.stop()

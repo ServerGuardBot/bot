@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from json import JSONDecoder, JSONEncoder
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
-from project import app, bot_api, db
+from project import app, BotAPI, db
 from project.server.models import Guild, GuildUser, UserInfo
 from project.helpers.premium import get_user_premium_status
 from guilded import SocialLinkType, http
@@ -15,64 +15,65 @@ decoder = JSONDecoder()
 guilds_blueprint = Blueprint('guilds', __name__)
 
 async def get_user_info(guild_id: str, user_id: str):
-    user: UserInfo = UserInfo.query.filter(UserInfo.user_id == user_id).first()
-    update_user = False
-
-    if user is None:
-        update_user = True
-    else:
-        if datetime.now() > user.last_updated + timedelta(days=1):
-            update_user = True
-            user.last_updated = datetime.now()
-    
-    if update_user:
-        connections = {}
-
-        try:
-            profile: dict = await bot_api.request(http.Route('GET', f'/users/{user_id}/profilev3', override_base=http.Route.USER_BASE))
-            for t in profile.get('socialLinks'):
-                connections[t['type']] = {
-                    'handle': t['handle'],
-                    'serviceId': t['serviceId']
-                }
-        except:
-            # Fallback to Bot API method if the other method don't work
-            for t in SocialLinkType:
-                if connections.get(t.value): # Skip any aliases that were already handled
-                    pass
-                try:
-                    link: dict = (await bot_api.get_member_social_links(guild_id, user_id, t.value))['socialLink']
-                    connections[t.value] = {
-                        'handle': link.get('handle'),
-                        'serviceId': link.get('service_id', link.get('serviceId'))
-                    }
-                except Exception as e:
-                    pass # Silently error
-        
-        guild_user: dict = (await bot_api.get_user(user_id)).get('user')
-
-        try:
-            guilds: list = (await bot_api.request(http.Route('GET', f'/users/{user_id}/teams', override_base=http.Route.USER_BASE))).get('teams', [])
-        except:
-            # Fallback to an empty dict if not possible, or to None if we are updating
-            if user is None:
-                guilds: list = {}
-            else:
-                guilds = None
-
-        premium = await get_user_premium_status(user_id)
+    with BotAPI() as bot_api:
+        user: UserInfo = UserInfo.query.filter(UserInfo.user_id == user_id).first()
+        update_user = False
 
         if user is None:
-            user = UserInfo(user_id, guild_user, connections, guilds, premium)
+            update_user = True
         else:
-            UserInfo.update_user_data(user, guild_user)
-            UserInfo.update_connections(user, connections)
-            if guilds is not None:
-                UserInfo.update_guilds(user, guilds)
-            user.premium = str(premium)
-        db.session.add(user)
-        db.session.commit()
-    return user
+            if datetime.now() > user.last_updated + timedelta(days=1):
+                update_user = True
+                user.last_updated = datetime.now()
+        
+        if update_user:
+            connections = {}
+
+            try:
+                profile: dict = await bot_api.request(http.Route('GET', f'/users/{user_id}/profilev3', override_base=http.Route.USER_BASE))
+                for t in profile.get('socialLinks'):
+                    connections[t['type']] = {
+                        'handle': t['handle'],
+                        'serviceId': t['serviceId']
+                    }
+            except:
+                # Fallback to Bot API method if the other method don't work
+                for t in SocialLinkType:
+                    if connections.get(t.value): # Skip any aliases that were already handled
+                        pass
+                    try:
+                        link: dict = (await bot_api.get_member_social_links(guild_id, user_id, t.value))['socialLink']
+                        connections[t.value] = {
+                            'handle': link.get('handle'),
+                            'serviceId': link.get('service_id', link.get('serviceId'))
+                        }
+                    except Exception as e:
+                        pass # Silently error
+            
+            guild_user: dict = (await bot_api.get_user(user_id)).get('user')
+
+            try:
+                guilds: list = (await bot_api.request(http.Route('GET', f'/users/{user_id}/teams', override_base=http.Route.USER_BASE))).get('teams', [])
+            except:
+                # Fallback to an empty dict if not possible, or to None if we are updating
+                if user is None:
+                    guilds: list = {}
+                else:
+                    guilds = None
+
+            premium = await get_user_premium_status(user_id)
+
+            if user is None:
+                user = UserInfo(user_id, guild_user, connections, guilds, premium)
+            else:
+                UserInfo.update_user_data(user, guild_user)
+                UserInfo.update_connections(user, connections)
+                if guilds is not None:
+                    UserInfo.update_guilds(user, guilds)
+                user.premium = str(premium)
+            db.session.add(user)
+            db.session.commit()
+        return user
 
 class UserInfoResource(MethodView):
     """ User Info Resource """
@@ -82,53 +83,47 @@ class UserInfoResource(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        bot_api.session = aiohttp.ClientSession()
+        with BotAPI() as bot_api:
+            user_info: UserInfo = await get_user_info(guild_id, user_id)
 
-        user_info: UserInfo = await get_user_info(guild_id, user_id)
+            return jsonify({
+                'id': user_info.user_id,
+                'name': user_info.name,
+                'avatar': user_info.avatar,
+                'guilded_data': user_info.guilded_data,
+                'created_at': user_info.created_at,
+                'connections': encoder.encode(user_info.connections or {}),
+                'language': user_info.language,
+                
+                'roblox': user_info.roblox,
+                'steam': user_info.steam,
+                'youtube': user_info.youtube,
+                'twitter': user_info.twitter,
 
-        await bot_api.session.close()
-
-        return jsonify({
-            'id': user_info.user_id,
-            'name': user_info.name,
-            'avatar': user_info.avatar,
-            'guilded_data': user_info.guilded_data,
-            'created_at': user_info.created_at,
-            'connections': encoder.encode(user_info.connections or {}),
-            'language': user_info.language,
-            
-            'roblox': user_info.roblox,
-            'steam': user_info.steam,
-            'youtube': user_info.youtube,
-            'twitter': user_info.twitter,
-
-            'guilds': encoder.encode(user_info.guilds),
-            'premium': int(user_info.premium)
-        }), 200
+                'guilds': encoder.encode(user_info.guilds),
+                'premium': int(user_info.premium)
+            }), 200
     async def patch(self, guild_id, user_id):
         auth = request.headers.get('authorization')
 
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        bot_api.session = aiohttp.ClientSession()
+        with BotAPI() as bot_api:
+            user_info: UserInfo = await get_user_info(guild_id, user_id)
 
-        user_info: UserInfo = await get_user_info(guild_id, user_id)
+            post_data = request.get_json()
 
-        await bot_api.session.close()
-
-        post_data = request.get_json()
-
-        for key in post_data.keys():
-            try:
-                setattr(user_info, key, post_data.get(key))
-            except Exception as e:
-                print(f'[WARNING]: "{key}" is not a valid member of the UserInfo model! <{e}>')
-                # Make sure that a failure doesn't lead to a 500 error and notifies the logs
-        db.session.add(user_info)
-        db.session.commit()
-        
-        return 'Success', 200
+            for key in post_data.keys():
+                try:
+                    setattr(user_info, key, post_data.get(key))
+                except Exception as e:
+                    print(f'[WARNING]: "{key}" is not a valid member of the UserInfo model! <{e}>')
+                    # Make sure that a failure doesn't lead to a 500 error and notifies the logs
+            db.session.add(user_info)
+            db.session.commit()
+            
+            return 'Success', 200
 
 class GetGuildUser(MethodView):
     def get(self, guild_id, user_id):
