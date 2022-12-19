@@ -1448,10 +1448,17 @@ class GeneralModule(Module):
                     await message.reply(embed=em, private=True, delete_after=10)
             if xp_cache.get(id):
                 return # They cannot gain xp at this point in time
+
+            requests.patch(f'http://localhost:5000/guilddata/{message.server_id}', json={
+                'active': True
+            }, headers={
+                'authorization': bot_config.SECRET_KEY
+            }) # Since the bot received a message from the server, make sure its active state is accurate in the DB
+            # As in some cases, a server might be added while the bot is restarting.
+
             guild_data: dict = self.get_guild_data(message.server_id)
             config = guild_data.get('config', {})
             xp_gain = config.get('xp_gain', {})
-            print(xp_gain)
             if len(xp_gain) > 0 and any([item > 0 for item in list(xp_gain.values())]):
                 # Only go further if there are any gains that a user can possibly obtain
                 member = await message.guild.getch_member(message.author.id)
@@ -1497,7 +1504,7 @@ class GeneralModule(Module):
 
         @bot.event
         async def on_bot_remove(event: BotRemoveEvent):
-            result = requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
+            requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
                 'active': False
             }, headers={
                 'authorization': bot_config.SECRET_KEY
@@ -1518,7 +1525,7 @@ class GeneralModule(Module):
             .add_field(name='Links', value='[Support Server](https://www.guilded.gg/server-guard) • [Website](https://serverguard.xyz) • [Invite](https://www.guilded.gg/b/c10ac149-0462-4282-a632-d7a8808c6c6e)', inline=False)
             await default.send(embed=em)
 
-            result = requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
+            requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
                 'active': True
             }, headers={
                 'authorization': bot_config.SECRET_KEY

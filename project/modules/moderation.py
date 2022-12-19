@@ -11,10 +11,10 @@ from guilded import Embed, Colour, Forbidden, MemberJoinEvent, MemberRemoveEvent
 from humanfriendly import parse_timespan, format_timespan
 from better_profanity import Profanity
 from unidecode import unidecode
+from bs4 import BeautifulSoup
 
 import os
 import requests
-import aiohttp
 import joblib
 import numpy as np
 
@@ -737,7 +737,7 @@ class ModerationModule(Module):
                     for _, link in re.findall(r'\[(.*?)\]\((.*?)\)', message.content):
                         if link.startswith('https://media.tenor.com/') and not '@' in link:
                             continue
-                        if re.search(r'.+(.(jpe?g?|jif|jfif?|png|gif|bmp|dib|webp|tiff?|raw|arw|cr2|nrw|k25|heif|heic|indd?|indt|jp2|j2k|jpf|jpx|jpm|mj2|svgz?|ai|eps))', link):
+                        if re.search(r'.+(\.(jpe?g?|jif|jfif?|png|gif|bmp|dib|webp|tiff?|raw|arw|cr2|nrw|k25|heif|heic|indd?|indt|jp2|j2k|jpf|jpx|jpm|mj2|svgz?|ai|eps))', link):
                             if isinstance(message, ChatMessage):
                                 await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.trusted.image')), private=True)
                             try:
@@ -754,37 +754,36 @@ class ModerationModule(Module):
                             })
                             if head_req.status_code == 200:
                                 content_type = head_req.headers.get('content-type')
-                                content_disposition = head_req.get('content-disposition')
+                                content_disposition = head_req.headers.get('content-disposition')
                                 blocked = False
-                                if 'image' in content_type or re.search(r'.+(.(jpe?g?|jif|jfif?|png|gif|bmp|dib|webp|tiff?|raw|arw|cr2|nrw|k25|heif|heic|indd?|indt|jp2|j2k|jpf|jpx|jpm|mj2|svgz?|ai|eps))', content_disposition):
+                                if 'image' in content_type or re.search(r'.+(\.(jpe?g?|jif|jfif?|png|gif|bmp|dib|webp|tiff?|raw|arw|cr2|nrw|k25|heif|heic|indd?|indt|jp2|j2k|jpf|jpx|jpm|mj2|svgz?|ai|eps))', content_disposition):
                                     blocked = True
                                 elif 'html' in content_type:
                                     page_req = requests.get(link, headers={
                                         'user-agent': USER_AGENT
                                     })
-                                    # TODO: Replace all this with an XML parsing solution
                                     if page_req.status_code == 200:
-                                        for url in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:image|"og:image"|og:image|'twitter:image'|"twitter:image"|twitter:image|'twitter:image:src'|"twitter:image:src"|twitter:image:src))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
+                                        parsed_html = BeautifulSoup(page_req.text)
+                                        for tag in parsed_html('meta', attrs={'property': ['og:image', 'twitter:image', 'twitter:image:src']}):
                                             blocked = True
-                                            break
-                                        for og_type in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\sproperty=(?:'og:type|"og:type"|og:type))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
-                                            og_type: str = og_type.lower().strip()
+                                        for tag in parsed_html('meta', attrs={'property': ['og:type']}):
+                                            og_type: str = tag['content'].lower().strip()
                                             if og_type.startswith(('article', 'website', 'book', 'profile', 'video', 'music')):
                                                 blocked = False
-                                                break
-                                        for desc in re.findall(r"""<meta(?=\s|>)(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\s(?:property|name)=(?:'description|"description"|'description'|og:description|"og:description"|og:description))(?=(?:[^>=]|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*?\scontent=('[^']*'|"[^"]*"|[^'"][^\s>]*))(?:[^'">=]*|='[^']*'|="[^"]*"|=[^'"][^\s>]*)*>""", page_req.text):
-                                            desc: str = desc.lower().strip()
+                                        for tag in parsed_html('meta', attrs={'property': ['og:description']}):
+                                            desc: str = tag['content'].lower().strip()
                                             if 'screenshot' in desc or '':
                                                 blocked = False
-                                                break
-                                        for keywords in re.findall(r"""< *meta +name *= *[\"\'] *keywords *[\"\'] *content= *[\"'](.+)[\"\'] *>""", page_req.text):
-                                            keywords: str = keywords.lower()
+                                        for tag in parsed_html('meta', attrs={'name': ['description']}):
+                                            desc: str = tag['content'].lower().strip()
+                                            if 'screenshot' in desc or '':
+                                                blocked = False
+                                        for tag in parsed_html('meta', attrs={'name': ['keywords']}):
+                                            keywords: str = tag['content'].lower()
                                             if 'photo' in keywords or 'image upload' in keywords or 'image hosting' in keywords:
                                                 blocked = True
-                                                break
                                             if 'video' in keywords or not 'image' in keywords:
                                                 blocked = False
-                                                break
                                 if blocked is True:
                                     if isinstance(message, ChatMessage):
                                         await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.trusted.image')), private=True)
