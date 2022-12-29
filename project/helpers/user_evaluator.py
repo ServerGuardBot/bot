@@ -1,9 +1,9 @@
 from datetime import datetime
 from dateutil import parser
 from json import JSONDecoder
-from project import client, bot_config
+from project import bot_config
 from project.helpers.images import *
-from guilded import Embed, User
+from guilded import Embed
 from humanfriendly import format_timespan
 import requests, guilded
 

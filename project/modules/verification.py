@@ -92,7 +92,7 @@ class VerificationModule(Module):
             if user.bot:
                 pass # We know bots aren't real users lol
             links = await social_links.get_connections(ctx.guild.id, user.id)
-            eval_result = await user_evaluator.evaluate_user(ctx.guild.id, user.id, encoder.encode(links))
+            eval_result = await user_evaluator.evaluate_user(ctx.guild.id, user.id, encoder.encode(links) if isinstance(links, dict) else links)
 
             await ctx.reply(embed=user_evaluator.generate_embed(eval_result))
         

@@ -1,9 +1,9 @@
 from csv import reader
+import os
 import random
 import re
 import string
 import uuid
-import aiohttp
 import project.helpers.token as token
 import geoip2.database as geoip
 
@@ -29,7 +29,7 @@ code_cache = Cache(60*10, shared_dict) # Codes expire after 10 minutes
 shared_dict2, shared_lock2 = get_shared_state(port=35795, key=b"config_cache")
 config_cache = Cache(60*10, shared_dict2) # Config check caches expire after 10 minutes
 
-geoip_reader = geoip.Reader('/usr/share/GeoIP/GeoLite2-City.mmdb')
+geoip_reader = geoip.Reader(os.getenv('GEOIP_DB', '/usr/share/GeoIP/GeoLite2-City.mmdb'))
 
 class AuthToken:
     user_id: str

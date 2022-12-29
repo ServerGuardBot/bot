@@ -83,26 +83,25 @@ class UserInfoResource(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         
-        with BotAPI() as bot_api:
-            user_info: UserInfo = await get_user_info(guild_id, user_id)
+        user_info: UserInfo = await get_user_info(guild_id, user_id)
 
-            return jsonify({
-                'id': user_info.user_id,
-                'name': user_info.name,
-                'avatar': user_info.avatar,
-                'guilded_data': user_info.guilded_data,
-                'created_at': user_info.created_at,
-                'connections': encoder.encode(user_info.connections or {}),
-                'language': user_info.language,
-                
-                'roblox': user_info.roblox,
-                'steam': user_info.steam,
-                'youtube': user_info.youtube,
-                'twitter': user_info.twitter,
+        return jsonify({
+            'id': user_info.user_id,
+            'name': user_info.name,
+            'avatar': user_info.avatar,
+            'guilded_data': user_info.guilded_data,
+            'created_at': user_info.created_at,
+            'connections': user_info.connections,
+            'language': user_info.language,
+            
+            'roblox': user_info.roblox,
+            'steam': user_info.steam,
+            'youtube': user_info.youtube,
+            'twitter': user_info.twitter,
 
-                'guilds': encoder.encode(user_info.guilds),
-                'premium': int(user_info.premium)
-            }), 200
+            'guilds': encoder.encode(user_info.guilds),
+            'premium': int(user_info.premium)
+        }), 200
     async def patch(self, guild_id, user_id):
         auth = request.headers.get('authorization')
 
