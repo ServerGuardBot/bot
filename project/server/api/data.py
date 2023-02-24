@@ -39,7 +39,7 @@ class ServerCacheResource(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         guild_data: Guild = Guild.query \
-            .filter(GuildUser.guild_id == guild_id) \
+            .filter(Guild.guild_id == guild_id) \
             .first()
         
         if guild_data is None:
@@ -73,7 +73,7 @@ class ServerCacheResource(MethodView):
         if auth != app.config.get('SECRET_KEY'):
             return 'Forbidden.', 403
         guild_data: Guild = Guild.query \
-            .filter(GuildUser.guild_id == guild_id) \
+            .filter(Guild.guild_id == guild_id) \
             .first()
         
         if guild_data is None:
