@@ -258,7 +258,7 @@ class ServerConfigResource(MethodView):
         
         if guild_user is not None and guild_user.permission_level > 2:
             guild_data: Guild = Guild.query \
-                .filter(GuildUser.guild_id == guild_id) \
+                .filter(Guild.guild_id == guild_id) \
                 .first()
             
             if guild_data is None:
@@ -279,7 +279,7 @@ class ServerConfigResource(MethodView):
             
             if guild_user is not None and guild_user.permission_level > 2:
                 guild_data: Guild = Guild.query \
-                    .filter(GuildUser.guild_id == guild_id) \
+                    .filter(Guild.guild_id == guild_id) \
                     .first()
                 
                 if guild_data is None:
