@@ -32,6 +32,7 @@ unidecode = "*"
 geoip2 = "*"
 user-agents = "*"
 beautifulsoup4 = "*"
+levenshtein = "*"
 
 [dev-packages]
 

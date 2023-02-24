@@ -169,6 +169,48 @@ async def handle_url_config(server, value):
         raise Exception
     return url
 
+async def handle_list_config(server, value):
+    value = JSONDecoder().decode(value)
+    if type(value) is not list:
+        raise Exception
+    return value
+
+async def handle_perm_config(server, value):
+    value = JSONDecoder().decode(value)
+    if type(value) is not list:
+        raise Exception
+    permsList = []
+    for role in value:
+        role: dict
+        if len(role.get('perms', [])) > 0 and ('Admin' in role['perms'] or 'Moderator' in role['perms']):
+            permsList.append({
+                'id': role['id'],
+                'level': 'Admin' in role['perms'] and 1 or 0
+            })
+    return permsList
+
+async def handle_trusted_config(server, value):
+    value = JSONDecoder().decode(value)
+    if type(value) is not list:
+        raise Exception
+    permsList = []
+    for role in value:
+        role: dict
+        if 'Trusted' in role.get('perms', []):
+            permsList.append(role['id'])
+    return permsList
+
+async def handle_xp_gain(server, value):
+    value = JSONDecoder().decode(value)
+    if type(value) is not list:
+        raise Exception
+    xpGains = {}
+    for role in value:
+        role: dict
+        if role['xp'] == 0: continue
+        xpGains[str(role['id'])] = role['xp']
+    return xpGains
+
 config_handlers = {
     'verification_channel': handle_channel_config,
     'logs_channel': handle_channel_config,
@@ -190,7 +232,18 @@ config_handlers = {
     'invite_link_filter': handle_bool_config,
     'use_welcome': handle_bool_config,
     'welcome_image': handle_url_config,
-    'welcome_message': handle_string_config
+    'welcome_message': handle_string_config,
+    'block_tor': handle_bool_config,
+    'raid_guard': handle_bool_config,
+    'filters': handle_list_config,
+    'rf_blacklist': handle_list_config,
+    'rf_toxicity': handle_threshold_config,
+    'rf_hatespeech': handle_threshold_config,
+    'rf_nsfw': handle_threshold_config,
+    'roles': handle_perm_config,
+    'trusted_roles': handle_trusted_config,
+    'untrusted_block_images': handle_bool_config,
+    'xp_gain': handle_xp_gain,
 }
 
 class ServerConfigResource(MethodView):
@@ -211,6 +264,7 @@ class ServerConfigResource(MethodView):
             if guild_data is None:
                 return 'Guild not in database', 400
             else:
+                print(guild_data.config)
                 return jsonify(guild_data.config), 200
         else:
             return 'Forbidden', 403
@@ -243,6 +297,9 @@ class ServerConfigResource(MethodView):
                                 newValues[key] = guild_data.config.get(key)
                             except Exception as e:
                                 failures[key] = str(e)
+                    
+                    db.session.add(guild_data)
+                    db.session.commit()
 
                     if len(failures) == len(post_data):
                         return jsonify({

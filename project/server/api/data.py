@@ -5,9 +5,102 @@ from project import app, db
 from sqlalchemy import func
 
 from project.server.api.auth import get_user_auth
-from project.server.models import BotData, AnalyticsItem, Guild
+from project.server.models import BotData, AnalyticsItem, Guild, GuildUser
 
 data_blueprint = Blueprint('data', __name__)
+
+class ServerCacheResource(MethodView):
+    """ Server Cache Resource """
+    async def get(self, guild_id):
+        auth = get_user_auth()
+
+        guild_user: GuildUser = GuildUser.query \
+            .filter(GuildUser.guild_id == guild_id) \
+            .filter(GuildUser.user_id == auth) \
+            .first()
+        
+        if guild_user is not None and guild_user.permission_level > 2:
+            guild_data: Guild = Guild.query \
+                .filter(GuildUser.guild_id == guild_id) \
+                .first()
+            
+            if guild_data is None:
+                return 'Guild not in database', 400
+            else:
+                cache: dict = guild_data.config.get('__cache', {})
+
+                return jsonify({
+                    'message': 'Success',
+                    'cache': cache
+                }), 200
+    async def put(self, guild_id, type):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        guild_data: Guild = Guild.query \
+            .filter(GuildUser.guild_id == guild_id) \
+            .first()
+        
+        if guild_data is None:
+            return 'Guild not in database', 400
+        else:
+            post_data: list = request.get_json()
+            cache: dict = guild_data.config.get('__cache')
+
+            if cache is None:
+                cache = {}
+                guild_data.config['__cache'] = cache
+
+            cache_store: dict = cache.get(type)
+
+            if cache_store is None:
+                cache_store = {}
+                cache[type] = cache_store
+
+            for item in post_data:
+                cache_store[item['id']] = item
+            
+            db.session.add(guild_data)
+            db.session.commit()
+
+            return jsonify({
+                'message': 'Success'
+            }), 200
+    async def delete(self, guild_id, type):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+        guild_data: Guild = Guild.query \
+            .filter(GuildUser.guild_id == guild_id) \
+            .first()
+        
+        if guild_data is None:
+            return 'Guild not in database', 400
+        else:
+            post_data: list = request.get_json()
+            cache: dict = guild_data.config.get('__cache')
+
+            if cache is None:
+                cache = {}
+                guild_data.config['__cache'] = cache
+
+            cache_store: dict = cache.get(type)
+
+            if cache_store is None:
+                cache_store = {}
+                cache[type] = cache_store
+
+            for item in post_data:
+                del cache_store[item['id']]
+            
+            db.session.add(guild_data)
+            db.session.commit()
+
+            return jsonify({
+                'message': 'Success'
+            }), 200
 
 class AnalyticsDashResource(MethodView):
     """ Analytics Dash Resource """
@@ -286,6 +379,9 @@ class BotDataResource(MethodView):
 
             if method == 'increment':
                 data.value = str(int(data.value) + int(value))
+
+data_blueprint.add_url_rule('/data/cache/<guild_id>', view_func=ServerCacheResource.as_view('servercache_get'))
+data_blueprint.add_url_rule('/data/cache/<guild_id>/<type>', view_func=ServerCacheResource.as_view('servercache'))
 
 data_blueprint.add_url_rule('/data/<key>', view_func=BotDataResource.as_view('botdata_get'))
 data_blueprint.add_url_rule('/data/<key>/<value>', view_func=BotDataResource.as_view('botdata'))

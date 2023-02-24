@@ -1,8 +1,8 @@
 import hashlib
 import random
 import string
+from typing import Optional
 import jwt
-import aiohttp
 import requests
 import base64
 
@@ -53,6 +53,18 @@ async def send_embed(channel_id, embed: Embed):
         return await bot_api.create_channel_message(channel_id, payload={
             'embeds': [embed.to_dict()]
         })
+
+def validate_turnstile(turnstile_response: str, user_ip: Optional[str]):
+    res = requests.post(
+        'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+        data={
+            'secret': app.config.get('TURNSTILE_SECRET'),
+            'response': turnstile_response,
+            'remoteip': user_ip
+        }
+    )
+    
+    return res.status_code == 200
 
 class VerifyUser(MethodView):
     """ User Verification Resource """
@@ -111,13 +123,15 @@ class VerifyUser(MethodView):
             return jsonify({
                 'message': 'Your client is using an outdated version of the verification page, please Press Control + Shift + R and try verifying again.'
             }), 403
-        browser_id = post_data.get('bi') or request.cookies.get('a')
-        using_vpn = (post_data.get('v') or request.cookies.get('b')) != '0'
+        browser_id = post_data.get('bi')
+        using_vpn = post_data.get('v') != '0'
+        turnstile = post_data.get('cf')
 
         with BotAPI() as bot_api:
             try:
                 token = verif_token.decode_token(t)
-                hashed_ip = hashlib.sha512(request.headers.get('cf-connecting-ip', request.environ.get('HTTP_X_REAL_IP', request.remote_addr)).encode('utf-8')).hexdigest()
+                user_ip = request.headers.get('cf-connecting-ip', request.environ.get('HTTP_X_REAL_IP', request.remote_addr))
+                hashed_ip = hashlib.sha512(user_ip.encode('utf-8')).hexdigest()
 
                 db_guild: dict = (await bot_api.get_server(token.guild_id)).get('server')
                 guild: Guild = Guild.query.filter_by(guild_id = token.guild_id).first()
@@ -155,6 +169,33 @@ class VerifyUser(MethodView):
                         db.session.commit()
                 
                 user_info: UserInfo = await get_user_info(token.guild_id, token.user_id)
+
+                if turnstile is not None:
+                    is_turnstile_valid = validate_turnstile(turnstile, user_ip)
+
+                    if is_turnstile_valid is False:
+                        # Failed cloudflare turnstile, reject and log it
+                        if logs_channel is not None:
+                            await send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                                await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
+                                False,
+                                "Turnstile Challenge Failed"
+                            ))
+                        return jsonify({
+                            'message': 'Failed turnstile challenge.'
+                        }), 403
+                else:
+                    if app.config.get('ENFORCE_TURNSTILE', False):
+                        # Missing cloudflare turnstile response, reject and log it
+                        if logs_channel is not None:
+                            await send_embed(logs_channel, embed=user_evaluator.generate_embed(
+                                await user_evaluator.evaluate_user(token.guild_id, token.user_id, user_info.connections),
+                                False,
+                                "Missing Turnstile Response"
+                            ))
+                        return jsonify({
+                            'message': 'Missing turnstile response.'
+                        }), 403
 
                 if user.bypass_verification:
                     # Bot-related process

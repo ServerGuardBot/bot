@@ -1,18 +1,18 @@
-from multiprocessing.managers import BaseManager
-import re
 from project.modules.base import Module
 from project.modules.moderation import reset_filter_cache
 from project.helpers.embeds import *
 from project.helpers.Cache import Cache
-from project import bot_config, managers
+from project import bot_config
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
-from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote, http
+from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote
+from guilded import ServerChannelCreateEvent, ServerChannelDeleteEvent
 from datetime import datetime
 from humanfriendly import format_timespan
 from project.helpers.translator import getLanguages, translate
 
 import os
+import re
 import requests
 import itertools
 
@@ -239,9 +239,6 @@ class GeneralModule(Module):
 
     def initialize(self):
         bot = self.bot
-
-        self.bot_api = http.HTTPClient()
-        self.bot_api.token = os.getenv('BOT_KEY')
 
         start_time = datetime.now().timestamp()
 
@@ -1401,6 +1398,30 @@ class GeneralModule(Module):
             id = f'{message.guild.id}/{message.author.id}'
             if message.author.bot:
                 return
+            channel_payload = []
+
+            thisChannel = await message.server.getch_channel(message.channel_id)
+            channel_payload.append({
+                'id': thisChannel.id,
+                'name': thisChannel.name,
+                'type': thisChannel.type.name,
+                'jump': thisChannel.jump_url,
+            })
+
+            if len(message.raw_channel_mentions) > 0:
+                for channel_id in message.raw_channel_mentions:
+                    if channel_id == message.channel_id: continue # This channel is already in the payload
+                    channel = await message.server.getch_channel(channel_id)
+                    channel_payload.append({
+                        'id': channel.id,
+                        'name': channel.name,
+                        'type': channel.type.name,
+                        'jump': channel.jump_url,
+                    })
+            if len(channel_payload) > 0:
+                requests.put(f'http://localhost:5000/data/cache/{message.guild.id}/channels', headers={
+                    'authorization': bot_config.SECRET_KEY
+                }, json=channel_payload)
             if message.server_id == SUPPORT_SERVER_ID and not message.channel_id == LOGIN_CHANNEL_ID:
                 content = message.content.lower().strip()
                 for item in automated_responses:
@@ -1501,6 +1522,29 @@ class GeneralModule(Module):
                         )
                         await event.channel.send(embed=em, private=True, delete_after=10)
         bot.reaction_add_listeners.append(on_message_reaction_add)
+
+        @bot.event
+        async def on_server_channel_create(event: ServerChannelCreateEvent):
+            channel = await event.server.getch_channel(event.channel.id)
+            channel_payload = [{
+                'id': channel.id,
+                'name': channel.name,
+                'type': channel.type.name,
+                'jump': channel.jump_url,
+            }]
+            requests.put(f'http://localhost:5000/data/cache/{event.server_id}/channels', headers={
+                'authorization': bot_config.SECRET_KEY
+            }, json=channel_payload)
+        
+        @bot.event
+        async def on_server_channel_delete(event: ServerChannelDeleteEvent):
+            channel = event.channel
+            channel_payload = [{
+                'id': channel.id,
+            }]
+            requests.delete(f'http://localhost:5000/data/cache/{event.server_id}/channels', headers={
+                'authorization': bot_config.SECRET_KEY
+            }, json=channel_payload)
 
         @bot.event
         async def on_bot_remove(event: BotRemoveEvent):
