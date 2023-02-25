@@ -15,6 +15,7 @@ from flask import Blueprint, request, jsonify, make_response
 from flask.views import MethodView
 from project import app, db, get_shared_state, BotAPI
 from project.helpers.Cache import Cache
+from guilded import http
 
 from project.server.models import GuildUser, UserInfo, Guild, BlacklistedRefreshToken
 
@@ -330,18 +331,30 @@ class LoginResource(MethodView):
                 .filter(GuildUser.user_id == auth) \
                 .first()
             if guild_user is not None and guild_user.permission_level > 2:
+                guild_owner: GuildUser = GuildUser.query \
+                    .filter(GuildUser.guild_id == guild['id']) \
+                    .filter(GuildUser.user_id == auth) \
+                    .filter(GuildUser.permission_level == 4) \
+                    .first()
+                if guild_owner is not None:
+                    guild_owner_user: UserInfo = UserInfo.query \
+                        .filter(UserInfo.user_id == guild_owner.user_id) \
+                        .first()
+                    if guild_owner_user is not None:
+                        guild['premium'] = int(guild_owner_user.premium)
                 guilds.append(guild)
 
         return jsonify({
             'id': auth,
             'name': user_info.name,
             'avatar': user_info.avatar,
-            'premium': user_info.premium,
+            'premium': int(user_info.premium),
             'guilds': [{
                 'id': guild['id'],
                 'avatar': guild['avatar'],
                 'name': guild['name'],
-                'active': is_guild_active(guild['id'])
+                'active': is_guild_active(guild['id']),
+                'premium': guild.get('premium', 0),
             } for guild in guilds]
         }), 200
     async def post(self):
@@ -419,6 +432,19 @@ class LoginStatusResource(MethodView):
                 'user': user_id,
                 'lock': code_cache.get(code).get('lock')
             })
+
+            user = UserInfo.query.filter(UserInfo.user_id == user_id).first()
+            if user is not None:
+                with BotAPI() as bot_api:
+                    try:
+                        guilds: list = (await bot_api.request(http.Route('GET', f'/users/{user_id}/teams', override_base=http.Route.USER_BASE))).get('teams', [])
+                    except:
+                        guilds = None
+                    if guilds is not None:
+                        UserInfo.update_guilds(user, guilds)
+                        db.session.add(user)
+                        db.session.commit()
+
             return 'Success', 200
         else:
             return 'Not Found', 404
@@ -442,6 +468,18 @@ class RefreshResource(MethodView):
                 return 'Bad Request', 400
             
             blacklist_token(refresh)
+
+            user = UserInfo.query.filter(UserInfo.user_id == refresh_token.user_id).first()
+            if user is not None:
+                with BotAPI() as bot_api:
+                    try:
+                        guilds: list = (await bot_api.request(http.Route('GET', f'/users/{refresh_token.user_id}/teams', override_base=http.Route.USER_BASE))).get('teams', [])
+                    except:
+                        guilds = None
+                    if guilds is not None:
+                        UserInfo.update_guilds(user, guilds)
+                        db.session.add(user)
+                        db.session.commit()
 
             return jsonify({
                 'auth': AuthToken.generate(refresh_token.user_id),
