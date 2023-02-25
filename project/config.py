@@ -26,7 +26,7 @@ class BaseConfig:
     PROXYCHECK_KEY = os.getenv('PROXYCHECK_KEY', 'proxycheck')
     TURNSTILE_SECRET = os.getenv('TURNSTILE_SECRET', '1x0000000000000000000000000000000AA')
     
-    ENFORCE_TURNSTILE = os.getenv('ENFORCE_TURNSTILE', False) # Flag to turn on turnstile once the website is ready for it
+    ENFORCE_TURNSTILE = os.getenv('ENFORCE_TURNSTILE', 'false').lower() in ['true', '1', 't'] # Flag to turn on turnstile once the website is ready for it
     PROJECT_ROOT = os.getenv('PROJECT_ROOT', '/root/serverguard')
     SECRET_KEY = os.getenv('SECRET_KEY', 'is_this_secret')
     DB_PASS = os.getenv('DB_PASS', 'is_this_db_pass')
