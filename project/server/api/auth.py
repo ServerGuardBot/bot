@@ -165,6 +165,8 @@ async def handle_url_config(server, value):
     value = str(value)
     if value is None:
         raise Exception
+    if value == '':
+        return value
     url = re.search("(?P<url>https?://[^\s\]\[]+)", value).group("url")
     if url is None:
         raise Exception
@@ -212,10 +214,31 @@ async def handle_xp_gain(server, value):
         xpGains[str(role['id'])] = role['xp']
     return xpGains
 
+def premium_config(level, handler):
+    async def handle(server, value):
+        server: Guild = server
+        premium = 0
+        guild_owner: GuildUser = GuildUser.query \
+            .filter(GuildUser.guild_id == server.guild_id) \
+            .filter(GuildUser.permission_level == 4) \
+            .first()
+        if guild_owner is not None:
+            guild_owner_user: UserInfo = UserInfo.query \
+                .filter(UserInfo.user_id == guild_owner.user_id) \
+                .first()
+            if guild_owner_user is not None:
+                premium = int(guild_owner_user.premium)
+        if premium < level:
+            raise Exception
+        return await handler(server, value)
+    return handle
+
 config_handlers = {
     'verification_channel': handle_channel_config,
+    'log_commands': handle_bool_config,
+    'silence_commands': handle_bool_config,
     'logs_channel': handle_channel_config,
-    'nsfw_logs_channel': handle_channel_config,
+    'nsfw_logs_channel': premium_config(1, handle_channel_config),
     'automod_logs_channel': handle_channel_config,
     'traffic_logs_channel': handle_channel_config,
     'message_logs_channel': handle_channel_config,
@@ -231,6 +254,7 @@ config_handlers = {
     'url_filter': handle_bool_config,
     'automod_duplicate': handle_bool_config,
     'invite_link_filter': handle_bool_config,
+    'admin_contact': handle_url_config,
     'use_welcome': handle_bool_config,
     'welcome_image': handle_url_config,
     'welcome_message': handle_string_config,
@@ -240,7 +264,7 @@ config_handlers = {
     'rf_blacklist': handle_list_config,
     'rf_toxicity': handle_threshold_config,
     'rf_hatespeech': handle_threshold_config,
-    'rf_nsfw': handle_threshold_config,
+    'rf_nsfw': premium_config(1, handle_threshold_config),
     'roles': handle_perm_config,
     'trusted_roles': handle_trusted_config,
     'untrusted_block_images': handle_bool_config,
@@ -294,7 +318,7 @@ class ServerConfigResource(MethodView):
                         handler = config_handlers.get(key)
                         if handler is not None:
                             try:
-                                guild_data.config[key] = await handler(guild_id, post_data.get(key))
+                                guild_data.config[key] = await handler(guild_data, post_data.get(key))
                                 newValues[key] = guild_data.config.get(key)
                             except Exception as e:
                                 failures[key] = str(e)
@@ -333,7 +357,6 @@ class LoginResource(MethodView):
             if guild_user is not None and guild_user.permission_level > 2:
                 guild_owner: GuildUser = GuildUser.query \
                     .filter(GuildUser.guild_id == guild['id']) \
-                    .filter(GuildUser.user_id == auth) \
                     .filter(GuildUser.permission_level == 4) \
                     .first()
                 if guild_owner is not None:

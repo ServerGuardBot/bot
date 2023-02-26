@@ -1493,6 +1493,26 @@ class GeneralModule(Module):
                 if gain > 0:
                     xp_cache.set(id, True)
                     await member.award_xp(gain)
+            if message.content.lower().startswith(bot.command_prefix) and await self.is_moderator(await message.server.getch_member(message.author_id)):
+                guild_data: dict = self.get_guild_data(message.server_id)
+                config: dict = guild_data.get('config', {})
+
+                if config.get('silence_commands', False):
+                    await message.delete()
+                if config.get('log_commands', False):
+                    logs_channel_id = config.get('action_logs_channel')
+                    if logs_channel_id != None:
+                        logs_channel = await message.server.getch_channel(logs_channel_id)
+
+                        em = Embed(
+                            title = 'Command Usage',
+                            colour = Colour.gilded()
+                        )
+                        em.set_thumbnail(url=message.author.avatar != None and message.author.avatar.aws_url or IMAGE_DEFAULT_AVATAR)
+                        em.add_field(name='User', value=message.author.name)
+                        em.add_field(name='Command', value=message.content, inline=False)
+
+                        await logs_channel.send(embed=em)
         self.bot.message_listeners.append(on_message)
 
         async def on_message_reaction_add(event: MessageReactionAddEvent):
