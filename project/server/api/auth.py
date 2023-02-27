@@ -110,7 +110,7 @@ def is_guild_active(guild_id: str):
 
 async def handle_channel_config(server, value):
     with BotAPI() as bot_api:
-        if str(value) == None:
+        if str(value) == None and value != '':
             raise Exception
         elif str(value).strip() != '':
             uuid.UUID(value) # This will error if it is not a valid UUID
@@ -130,9 +130,12 @@ async def handle_channel_config(server, value):
         return value
 
 async def handle_role_config(server, value):
+    server: Guild = server
     if int(value) == None:
         raise Exception
-    cached = config_cache.get(f'{server}/role/{value}')
+    if int(value) == 0:
+        return None
+    cached = config_cache.get(f'{server.guild_id}/role/{value}')
     if cached is not None:
         if not cached:
             raise Exception

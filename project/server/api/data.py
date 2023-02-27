@@ -5,7 +5,7 @@ from project import app, db
 from sqlalchemy import func
 
 from project.server.api.auth import get_user_auth
-from project.server.models import BotData, AnalyticsItem, Guild, GuildUser
+from project.server.models import BotData, AnalyticsItem, Guild, GuildUser, UserInfo
 
 data_blueprint = Blueprint('data', __name__)
 
@@ -123,6 +123,12 @@ class AnalyticsDashResource(MethodView):
             .filter(AnalyticsItem.value > 0) \
             .all()
         
+        premiumHistorical: list = AnalyticsItem.query.filter(AnalyticsItem.date >= dt) \
+            .filter(AnalyticsItem.key == 'premium_users') \
+            .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
+            .filter(AnalyticsItem.value > 0) \
+            .all()
+        
         largestServers = db.session.query(Guild) \
             .filter(Guild.active == True) \
             .filter(Guild.members > 0) \
@@ -139,6 +145,10 @@ class AnalyticsDashResource(MethodView):
                 'time': item.date.timestamp(),
                 'value': item.value
             } for item in userHistorical],
+            'premium': [{
+                'time': item.date.timestamp(),
+                'value': item.value
+            } for item in premiumHistorical],
             'largestServers': [{
                 'id': server.guild_id,
                 'name': server.name,
@@ -220,6 +230,9 @@ class UserAnalyticsResource(MethodView):
         value = db.session.query(func.sum(Guild.members)) \
             .filter(Guild.active == True) \
             .scalar()
+        value2 = db.session.query(UserInfo.user_id) \
+            .filter(UserInfo.premium > 0) \
+            .count()
 
         item: AnalyticsItem = AnalyticsItem.query.filter(AnalyticsItem.date == dt) \
             .filter(AnalyticsItem.key == 'users') \
@@ -229,13 +242,24 @@ class UserAnalyticsResource(MethodView):
             item = AnalyticsItem('BOT INTERNAL', 'users', value, dt)
         else:
             item.value = value
+        
+        item2: AnalyticsItem = AnalyticsItem.query.filter(AnalyticsItem.date == dt) \
+            .filter(AnalyticsItem.key == 'premium_users') \
+            .filter(AnalyticsItem.guild_id == 'BOT INTERNAL') \
+            .first()
+        if item2 is None:
+            item2 = AnalyticsItem('BOT INTERNAL', 'premium_users', value2, dt)
+        else:
+            item2.value = value2
 
         db.session.add(item)
+        db.session.add(item2)
         db.session.commit()
 
         return jsonify({
             'time': dt.timestamp(),
-            'value': value
+            'value': value,
+            'value2': value2,
         }), 201
 
 class ServerAnalyticsResource(MethodView):
