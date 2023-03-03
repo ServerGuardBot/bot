@@ -33,6 +33,10 @@ async def send_feed(server_id: str, channel_id: str, entry: dict):
         em = em.set_image(
             url=entry['image']['href']
         )
+    elif entry.get('media_thumbnail', {}).get('url'):
+        em = em.set_image(
+            url=entry['media_thumbnai']['url']
+        )
 
     try:
         return await post_webhook(server_id, channel_id, 
