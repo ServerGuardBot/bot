@@ -7,6 +7,9 @@ from sqlalchemy import func
 from project.server.api.auth import get_user_auth
 from project.server.models import BotData, AnalyticsItem, Guild, GuildUser, UserInfo
 
+import os
+import psutil
+
 data_blueprint = Blueprint('data', __name__)
 
 class ServerCacheResource(MethodView):
@@ -136,6 +139,12 @@ class AnalyticsDashResource(MethodView):
             .limit(10) \
             .all()
         
+        load1, load5, load15 = psutil.getloadavg()
+        cpu_usage = (load15/os.cpu_count()) * 100
+        total_memory, used_memory, free_memory = map(
+            int, os.popen('free -t -m').readlines()[-1].split()[1:])
+        hdd = psutil.disk_usage('/')
+        
         return jsonify({
             'servers': [{
                 'time': item.date.timestamp(),
@@ -155,7 +164,10 @@ class AnalyticsDashResource(MethodView):
                 'bio': server.bio,
                 'avatar': server.avatar,
                 'members': server.members
-            } for server in largestServers]
+            } for server in largestServers],
+            'cpu': cpu_usage,
+            'ram': [round((used_memory/total_memory) * 100, 2), total_memory, used_memory, free_memory],
+            'disk': [hdd.total / (2**30), hdd.used / (2**30), hdd.free / (2**30)]
         }), 200
 
 class NoneServersResource(MethodView):

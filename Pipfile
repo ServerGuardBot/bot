@@ -35,6 +35,7 @@ beautifulsoup4 = "*"
 levenshtein = "*"
 feedparser = "*"
 markdownify = "*"
+psutil = "*"
 
 [dev-packages]
 
