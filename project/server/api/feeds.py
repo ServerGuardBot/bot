@@ -116,7 +116,7 @@ class FeedDataConfig(MethodView):
         if feedData == None:
             return 'Not Found', 404
         
-        db.session.remove(feedData)
+        db.session.delete(feedData)
         db.session.commit()
         return 'Deleted', 204
 
@@ -281,7 +281,7 @@ class FeedConfig(MethodView):
                 .first()
             
             if feed != None:
-                db.session.remove(feed)
+                db.session.delete(feed)
                 db.session.commit()
 
                 return "Removed", 204
