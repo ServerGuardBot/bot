@@ -1,5 +1,6 @@
 from json import JSONDecoder, JSONEncoder
 import random
+import re
 import string
 from project import db
 from project.helpers.images import *
@@ -129,6 +130,46 @@ class GuildUserStatus(db.Model):
 
     def __repr__(self):
         return f'<GuildUserStatus {self.internal_id}>'
+
+class GuildChannelConfig(db.Model):
+    """ Guild Channel Config model for storing guild channel configurations """
+    __tablename__ = 'guildchannelconfigs'
+    internal_id = db.Column(db.String(500), primary_key=True)
+    unique_id = db.Column(db.String(500), nullable=False)
+    guild_id = db.Column(db.String(500), nullable=False)
+    channel_id = db.Column(db.String(500), nullable=False)
+
+    type = db.Column(db.String(500), nullable=False)
+    value = db.Column(NestedMutableJson, nullable=False)
+
+    def __init__(self, guild_id: str, channel_id: str, type: str, value: dict):
+        self.unique_id = "".join(random.choices(string.ascii_letters, k=15))
+        self.internal_id = f'{guild_id}/{channel_id}/{type}/{self.unique_id}'
+        self.guild_id = guild_id
+        self.channel_id = channel_id
+        self.type = type
+        self.value = value
+    
+    def __repr__(self):
+        return f'<GuildChannelConfig {self.internal_id}>'
+
+class FeedData(db.Model):
+    """ Feed Data model for storing RSS feeds and their information """
+    __tablename__ = 'feeddata'
+    id = db.Column(db.String(500), primary_key=True)
+    url = db.Column(db.String(500), nullable=False)
+    name = db.Column(db.String(500), nullable=False)
+    blur_hash = db.Column(db.String(40), nullable=False)
+
+    def __init__(self, name: str, url: str, blur_hash: str):
+        formatted_name = re.sub(r'[\W]+', '-', name.lower().strip().replace(' ', '-'))
+        self.id = f'{formatted_name[0:min(len(formatted_name), 10)]}-{"".join(random.choices(string.ascii_letters, k=15))}'
+        self.name = name
+        self.url = url
+        self.blur_hash = blur_hash
+    
+    def __repr__(self):
+        return f'<FeedData {self.id}>'
 
 class UserInfo(db.Model):
     """ User Info model for storing user information to be shared across guilds """

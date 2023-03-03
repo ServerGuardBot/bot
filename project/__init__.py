@@ -195,6 +195,13 @@ async def run_bot_loop():
             'authorization': bot_config.SECRET_KEY
         })
 
+async def run_feed_loop():
+    while True:
+        requests.post('http://localhost:5000/feeds/check', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+        await asyncio.sleep(60 * 30)
+
 if not os.getenv('MIGRATING_DB', '0') == '1':
     load_malicious_url_db()
 
@@ -204,6 +211,7 @@ async def on_ready():
     print(f'Logged in as {client.user.name}')
     client.loop.create_task(run_bot_loop())
     client.loop.create_task(run_url_db_dl())
+    client.loop.create_task(run_feed_loop())
     client.loop.create_task(run_analytics_loop())
     print('Bot ready')
 
@@ -373,12 +381,14 @@ from project.server.api.moderation import moderation_blueprint
 from project.server.api.guilds import guilds_blueprint
 from project.server.api.data import data_blueprint
 from project.server.api.auth import auth_blueprint
+from project.server.api.feeds import feeds_blueprint
 
 app.register_blueprint(verification_blueprint)
 app.register_blueprint(moderation_blueprint)
 app.register_blueprint(guilds_blueprint)
 app.register_blueprint(data_blueprint)
 app.register_blueprint(auth_blueprint)
+app.register_blueprint(feeds_blueprint)
 
 if app_settings == 'DevelopmentConfig' and not os.getenv('MIGRATING_DB', '0') == '1':
     import threading

@@ -1,14 +1,12 @@
-from datetime import datetime, date
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask.views import MethodView
 from project import BotAPI, app, db
 from project.server.models import Guild, GuildUserStatus
-from guilded import Embed, Colour, http
-from sqlalchemy import func
+from guilded import Embed, Colour
 
 import re
 import requests
-import aiohttp
 
 WARNING_ID_REGEX = '^%s/%s/warning/' + r'([a-zA-Z]+)'
 

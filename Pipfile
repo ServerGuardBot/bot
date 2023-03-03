@@ -33,6 +33,8 @@ geoip2 = "*"
 user-agents = "*"
 beautifulsoup4 = "*"
 levenshtein = "*"
+feedparser = "*"
+markdownify = "*"
 
 [dev-packages]
 
