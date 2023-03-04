@@ -17,28 +17,28 @@ import feedparser
 feeds_blueprint = Blueprint('feeds', __name__)
 
 async def send_feed(server_id: str, channel_id: str, entry: dict):
-    timestamp = entry.get('published_parsed', entry.get('created_parsed'))
-    em = Embed(
-        title=entry['title'],
-        url=entry['link'],
-        timestamp=datetime.fromtimestamp(mktime(timestamp)) if timestamp != None else None,
-        description=markdownify(entry.get('summary', 'No summary provided.')),
-        colour=Colour.gilded()
-    ) \
-        .set_author(
-            name=entry.get('author', EmptyEmbed),
-            url=entry.get('author_detail', {}).get('href', EmptyEmbed)
-        )
-    if entry.get('image', {}).get('href'):
-        em = em.set_image(
-            url=entry['image']['href']
-        )
-    elif entry.get('media_thumbnail', {}).get('url'):
-        em = em.set_image(
-            url=entry['media_thumbnai']['url']
-        )
-
     try:
+        timestamp = entry.get('published_parsed', entry.get('created_parsed'))
+        em = Embed(
+            title=entry['title'],
+            url=entry['link'],
+            timestamp=datetime.fromtimestamp(mktime(timestamp)) if timestamp != None else None,
+            description=markdownify(entry.get('summary', 'No summary provided.')),
+            colour=Colour.gilded()
+        ) \
+            .set_author(
+                name=entry.get('author', EmptyEmbed),
+                url=entry.get('author_detail', {}).get('href', EmptyEmbed)
+            )
+        if entry.get('image', {}).get('href'):
+            em = em.set_image(
+                url=entry['image']['href']
+            )
+        elif len(entry.get('media_thumbnail', [])) > 0:
+            em = em.set_image(
+                url=entry['media_thumbnail'][0]['url']
+            )
+
         return await post_webhook(server_id, channel_id, 
             embeds=[
                 em
