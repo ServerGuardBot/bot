@@ -1580,7 +1580,7 @@ class GeneralModule(Module):
             default = await server.fetch_default_channel()
             em = Embed(
                 title='Hello!',
-                description=f'Thanks <@{event.member_id}> for inviting me to **{server.name}!** To learn more about Server Guard use the /help command, or join our support server and look at the Information channel!',
+                description=f'Thanks <@{event.member_id}> for inviting me to **{server.name}!** To start configuring Server Guard, access your server\'s dashboard [here](https://serverguard.xyz/account)!',
                 timestamp=datetime.now(),
                 colour=Colour.gilded()
             ) \
