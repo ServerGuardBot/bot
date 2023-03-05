@@ -202,6 +202,13 @@ async def run_feed_loop():
         })
         await asyncio.sleep(60 * 30)
 
+async def run_cleanup_loop():
+    while True:
+        requests.post('http://localhost:5000/db/cleanup', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+        await asyncio.sleep(60 * 30)
+
 if not os.getenv('MIGRATING_DB', '0') == '1':
     load_malicious_url_db()
 
@@ -213,6 +220,7 @@ async def on_ready():
     client.loop.create_task(run_url_db_dl())
     client.loop.create_task(run_feed_loop())
     client.loop.create_task(run_analytics_loop())
+    client.loop.create_task(run_cleanup_loop())
     print('Bot ready')
 
 @client.event

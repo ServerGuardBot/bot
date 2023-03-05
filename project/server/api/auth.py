@@ -514,9 +514,22 @@ class RefreshResource(MethodView):
         except:
             return 'Refresh token has expired, please login again', 403
 
+class CleanupResource(MethodView):
+    """ Database Cleanup Resource """
+    async def post(self):
+        tokens: dict = BlacklistedRefreshToken.query \
+            .filter(datetime.now() > BlacklistedRefreshToken.expires) \
+            .all()
+        
+        for token in tokens:
+            db.session.delete(token)
+        db.session.commit()
+        return 'Success', 200
+
 auth_blueprint.add_url_rule('/auth', view_func=LoginResource.as_view('login'))
 auth_blueprint.add_url_rule('/auth/status/<code>', view_func=LoginStatusResource.as_view('login_status'))
 auth_blueprint.add_url_rule('/auth/status/<code>/<user_id>', view_func=LoginStatusResource.as_view('login_status_update'))
 auth_blueprint.add_url_rule('/auth/refresh', view_func=RefreshResource.as_view('login_refresh'))
+auth_blueprint.add_url_rule('/db/cleanup', view_func=CleanupResource.as_view('cleanup_db'))
 
 auth_blueprint.add_url_rule('/servers/<guild_id>/config', view_func=ServerConfigResource.as_view('server_config'))
