@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from time import mktime
 from flask import Blueprint, request, jsonify
@@ -25,9 +25,10 @@ async def send_feed(server_id: str, channel_id: str, entry: dict):
             timestamp=datetime.fromtimestamp(mktime(timestamp)) if timestamp != None else None,
             description=markdownify(entry.get('summary', 'No summary provided.')),
             colour=Colour.gilded()
-        ) \
-            .set_author(
-                name=entry.get('author', EmptyEmbed),
+        )
+        if entry.get('author'):
+            em = em.set_author(
+                name=entry.get('author'),
                 url=entry.get('author_detail', {}).get('href', EmptyEmbed)
             )
         if entry.get('image', {}).get('href'):
@@ -315,7 +316,7 @@ class CheckFeeds(MethodView):
                     # This item is a custom RSS feed from a more flexible feed item
                     result = checked_feeds.get(feed.value['url'])
                     if result == None:
-                        result = feedparser.parse(feed.value['url'])
+                        result = feedparser.parse(feed.value['url'], modified=datetime.fromtimestamp((datetime.now() - timedelta(minutes=30)).timestamp()))
                         checked_feeds[feed.value['url']] = result
                 else:
                     # It's a normal feed item
@@ -325,7 +326,7 @@ class CheckFeeds(MethodView):
                             FeedData.id == feed.value['id']
                         ).first()
                         if feedData != None:
-                            result = feedparser.parse(feedData.url)
+                            result = feedparser.parse(feedData.url, modified=datetime.fromtimestamp((datetime.now() - timedelta(minutes=30)).timestamp()))
                             checked_feeds[feed.value['id']] = result
                 if result != None:
                     knownIDs = feed.value.get('known', [])

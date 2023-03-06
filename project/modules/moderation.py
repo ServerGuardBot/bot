@@ -23,6 +23,7 @@ user_converter = commands.UserConverter()
 SERVER_INVITE_REGEX = r'h?t?t?p?s?:?\/?\/?w?w?w?\.?(discord\.gg|discordapp\.com\/invite|guilded\.gg|guilded\.com|guilded\.gg\/i|guilded\.com\/i)\/([\w/-]+)'
 IMAGE_EMBED_REGEX = r'\!\[(.*?)\]\((.*?)\)'
 USER_AGENT = 'Guilded Server Guard/1.0 (Image Check)'
+LOGIN_CHANNEL_ID = '1f6fae7f-6cdf-403d-80b9-623a76f8b621'
 
 MODELS_ROOT = bot_config.PROJECT_ROOT + '/project/ml_models'
 
@@ -800,11 +801,12 @@ class ModerationModule(Module):
             return False
 
         async def on_message_update(event: MessageUpdateEvent):
-            if not event.after.author.bot:
-                member = await event.server.getch_member(event.after.author.id)
-                if (await self.is_moderator(member)) == False and (await self.user_can_manage_server(member)) == False:
-                    if await handle_text_message(event.after):
-                        return
+            if event.after.author.bot:
+                return
+            member = await event.server.getch_member(event.after.author.id)
+            if (await self.is_moderator(member)) == False and (await self.user_can_manage_server(member)) == False:
+                if await handle_text_message(event.after):
+                    return
 
             guild_data: dict = self.get_guild_data(event.server_id)
             message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
@@ -829,7 +831,7 @@ class ModerationModule(Module):
         bot.message_update_listeners.append(on_message_update)
 
         async def on_message_delete(event: MessageDeleteEvent):
-            if event.message.author.bot:
+            if event.message.author.bot or event.channel_id == LOGIN_CHANNEL_ID:
                 return
             guild_data: dict = self.get_guild_data(event.server_id)
             message_log_channel = guild_data.get('config', {}).get('message_logs_channel')

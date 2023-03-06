@@ -171,6 +171,41 @@ class FeedData(db.Model):
     def __repr__(self):
         return f'<FeedData {self.id}>'
 
+class Giveaway(db.Model):
+    """ Giveaway model for storing a giveaway in a guild """
+    __tablename__ = 'giveaways'
+    internal_id = db.Column(db.String(500), primary_key=True)
+    id = db.Column(db.String(100), nullable=False)
+    guild_id = db.Column(db.String(500), nullable=False)
+    channel_id = db.Column(db.String(500), nullable=False)
+    original_message_id = db.Column(db.String(500), nullable=False)
+
+    ended = db.Column(db.Boolean, nullable=False)
+    ends_at = db.Column(db.DateTime, nullable=False)
+    prize = db.Column(db.String(500), nullable=False)
+    hosted_by = db.Column(db.String(500), nullable=False)
+    winner_amount = db.Column(db.Integer, nullable=False)
+    winners = db.Column(NestedMutableJson, nullable=False)
+    entries = db.Column(NestedMutableJson, nullable=False)
+
+    def __init__(self, guild_id: str, channel_id: str, message_id: str, winners: int, ends_at: datetime, prize: str, hosted_by: str):
+        self.id = "".join(random.choices(string.ascii_letters, k=30))
+        self.internal_id = f'{guild_id}/{channel_id}/{self.id}'
+        self.guild_id = guild_id
+        self.channel_id = channel_id
+        self.original_message_id = message_id
+        self.winner_amount = winners
+        self.ends_at = ends_at
+        self.prize = prize
+        self.ended = False
+        self.hosted_by = hosted_by
+
+        self.entries = []
+        self.winners = []
+    
+    def __repr__(self):
+        return f'<Giveaway {self.internal_id}>'
+
 class UserInfo(db.Model):
     """ User Info model for storing user information to be shared across guilds """
     __tablename__ = 'userinfo'

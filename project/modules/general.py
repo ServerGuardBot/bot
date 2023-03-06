@@ -70,9 +70,9 @@ class CustomHelpCommand(HelpCommand):
     
     def generate_command_translation_key(self, command: commands.Command):
         key = command.name.lower()
-        parent = command
+        parent = command.parent
 
-        while parent.parent is not None and parent.parent.name.lower() != 'config':
+        while parent is not None and parent.name.lower() != 'config':
             key = f'{parent.name.lower()}.{key}'
             parent = parent.parent
         key = f'command.{key}'

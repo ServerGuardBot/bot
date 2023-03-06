@@ -1,6 +1,6 @@
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MessageReactionAddEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
+from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MessageReactionAddEvent, MessageReactionRemoveEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
 from guilded.ext import commands
 from nsfw_detector import predict as nsfw_detect
 from zipfile import ZipFile
@@ -137,6 +137,7 @@ class BotClient(commands.Bot):
     ban_create_listeners: list = []
     ban_delete_listeners: list = []
     reaction_add_listeners: list = []
+    reaction_remove_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
 
@@ -192,6 +193,9 @@ async def run_bot_loop():
     while True:
         await asyncio.sleep(60)
         requests.post('http://localhost:5000/moderation/expirestatuses', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+        requests.post('http://localhost:5000/giveaways/check', headers={
             'authorization': bot_config.SECRET_KEY
         })
 
@@ -342,6 +346,14 @@ async def on_message_reaction_add(event: MessageReactionAddEvent):
         except Exception as e:
             print('Failed to run reaction add listener:', e)
 
+@client.event
+async def on_message_reaction_remove(event: MessageReactionRemoveEvent):
+    for callback in client.reaction_remove_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run reaction remove listener:', e)
+
 if not os.getenv('MIGRATING_DB', '0') == '1':
     print('Registering Modules')
     modules = [str(m) for m in sys.modules if m.startswith('modules.')]
@@ -390,6 +402,7 @@ from project.server.api.guilds import guilds_blueprint
 from project.server.api.data import data_blueprint
 from project.server.api.auth import auth_blueprint
 from project.server.api.feeds import feeds_blueprint
+from project.server.api.giveaways import giveaways_blueprint
 
 app.register_blueprint(verification_blueprint)
 app.register_blueprint(moderation_blueprint)
@@ -397,6 +410,7 @@ app.register_blueprint(guilds_blueprint)
 app.register_blueprint(data_blueprint)
 app.register_blueprint(auth_blueprint)
 app.register_blueprint(feeds_blueprint)
+app.register_blueprint(giveaways_blueprint)
 
 if app_settings == 'DevelopmentConfig' and not os.getenv('MIGRATING_DB', '0') == '1':
     import threading
