@@ -13,6 +13,8 @@ from markdownify import markdownify
 from werkzeug.exceptions import BadRequest
 
 import feedparser
+import requests
+import project.helpers.token as token
 
 feeds_blueprint = Blueprint('feeds', __name__)
 
@@ -32,12 +34,18 @@ async def send_feed(server_id: str, channel_id: str, entry: dict):
                 url=entry.get('author_detail', {}).get('href', EmptyEmbed)
             )
         if entry.get('image', {}).get('href'):
+            t = token.encodeToken({
+                'url': entry['image']['href']
+            })
             em = em.set_image(
-                url=entry['image']['href']
+                url=f'https://api.serverguard.xyz/proxy/{t}'
             )
         elif len(entry.get('media_thumbnail', [])) > 0:
+            t = token.encodeToken({
+                'url': entry['media_thumbnail'][0]['url']
+            })
             em = em.set_image(
-                url=entry['media_thumbnail'][0]['url']
+                url=f'https://api.serverguard.xyz/proxy/{t}'
             )
 
         return await post_webhook(server_id, channel_id, 
@@ -340,9 +348,25 @@ class CheckFeeds(MethodView):
                     db.session.commit()
         return 'Success', 200
 
+class Proxy(MethodView):
+    async def get(self, proxy: str):
+        try:
+            result = token.decodeToken(proxy)
+            response = requests.get(result['url'], headers={
+                'User-Agent': 'Guilded Server Guard/1.0 (Image Proxy)'
+            }, stream=True)
+            try:
+                response.headers.pop('Transfer-Encoding')
+            except:
+                pass
+            return (response.raw.read(), response.status_code, response.headers.items())
+        except:
+            return 'Forbidden', 403
+
 feeds_blueprint.add_url_rule('/feeds/check', view_func=CheckFeeds.as_view('checkfeeds'))
 feeds_blueprint.add_url_rule('/feeds/<guild_id>', view_func=FeedConfig.as_view('getfeeds'))
 feeds_blueprint.add_url_rule('/feeds/<guild_id>/<feed_id>', view_func=FeedConfig.as_view('alterfeeds'))
 feeds_blueprint.add_url_rule('/feeds/<guild_id>/<channel_id>/new', view_func=FeedConfig.as_view('createfeeds'))
 feeds_blueprint.add_url_rule('/feeds/data/<feed_id>', view_func=FeedDataConfig.as_view('feeddatas'))
 feeds_blueprint.add_url_rule('/feeds/data', view_func=FeedDataConfig.as_view('alterfeeddatas'))
+feeds_blueprint.add_url_rule('/proxy/<proxy>', view_func=Proxy.as_view('proxy_url'))
