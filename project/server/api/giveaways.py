@@ -157,7 +157,7 @@ class GiveawayResource(MethodView):
             if giveaway:
                 return jsonify({
                     'id': giveaway.id,
-                    'ends_at': giveaway.ends_at,
+                    'ends_at': giveaway.ends_at.timestamp(),
                     'prize': giveaway.prize,
                     'winners': giveaway.winner_amount,
                     'channel_id': giveaway.channel_id,
