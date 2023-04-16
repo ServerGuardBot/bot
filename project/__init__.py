@@ -1,10 +1,12 @@
+from datetime import datetime
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MessageReactionAddEvent, MessageReactionRemoveEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
+from guilded import Member, MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MessageReactionAddEvent, MessageReactionRemoveEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
 from guilded.ext import commands
 from nsfw_detector import predict as nsfw_detect
 from zipfile import ZipFile
 from project.helpers.Cache import Cache
+from project.helpers.embeds import *
 
 from project.modules.base import Module
 
@@ -211,6 +213,25 @@ async def run_cleanup_loop():
         requests.post('http://localhost:5000/db/cleanup', headers={
             'authorization': bot_config.SECRET_KEY
         })
+        # Try to remove bot from unconfigured servers that are older than 1 week
+        # NOTE: Maybe send an automated notice to unconfigured servers a day before removing itself?
+        for server in client.servers:
+            print(f'Checking "{server.id}"')
+            try:
+                guild_data_req = requests.get(f'http://localhost:5000/guilddata/{server.id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                guild_data: dict = guild_data_req.json()
+                config = guild_data.get('config', {})
+                if len(config) == 0 or (len(config) == 1 and config.get('__cache') != None):
+                    me = await server.fetch_member(client.user_id)
+                    joined: datetime = me.joined_at
+                    diff = datetime.now() - joined
+                    if diff.days >= 7:
+                        await server.kick(me)
+                        del server
+            except Exception as e:
+                print(f'Failed to check "{server.id}" for being unconfigured: {e}')
         await asyncio.sleep(60 * 30)
 
 if not os.getenv('MIGRATING_DB', '0') == '1':

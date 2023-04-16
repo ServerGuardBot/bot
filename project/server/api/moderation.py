@@ -317,7 +317,10 @@ class ExpiredStatuses(MethodView):
                     guild: Guild = Guild.query.filter_by(guild_id = status.guild_id).first()
                     user = (await bot_api.get_user(status.user_id))['user']
                     if status.type == 'ban':
-                        await bot_api.unban_server_member(status.guild_id, status.user_id)
+                        try:
+                            await bot_api.unban_server_member(status.guild_id, status.user_id)
+                        except Exception as e:
+                            print(f'Failed to unban user "{status.user_id}" from guild "{status.guild_id}"')
                         if guild.config.get('logs_channel'):
                             em = Embed(
                                 title = 'Ban ended',
@@ -334,7 +337,10 @@ class ExpiredStatuses(MethodView):
                         })
                     elif status.type == 'mute':
                         if guild.config.get('mute_role'):
-                            await bot_api.remove_role_from_member(status.guild_id, status.user_id, guild.config['mute_role'])
+                            try:
+                                await bot_api.remove_role_from_member(status.guild_id, status.user_id, guild.config['mute_role'])
+                            except Exception as e:
+                                print(f'Failed to unmute user "{status.user_id}" from guild "{status.guild_id}"')
                         if guild.config.get('logs_channel'):
                             em = Embed(
                                 title = 'Mute ended',

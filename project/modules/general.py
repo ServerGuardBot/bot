@@ -329,6 +329,33 @@ class GeneralModule(Module):
         language.cog = cog
 
         @bot.command()
+        async def serverinfo(_, ctx: commands.Context):
+            """Get information about the server you are in"""
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+            server = ctx.server
+
+            em = Embed(
+                title = server.name,
+                colour = Colour.gilded()
+            ) \
+            .set_footer(text='Server Guard') \
+            .set_thumbnail(url=(server.icon and server.icon.aws_url) or IMAGE_DEFAULT_AVATAR) \
+            .add_field(name=(await translate(curLang, 'serverinfo.about')), value=server.about, inline=False) \
+            .add_field(name=(await translate(curLang, 'serverinfo.owner')), value=f'<@{server.owner_id}>', inline=True) \
+            .add_field(name=(await translate(curLang, 'serverinfo.members')), value=server.member_count, inline=True) \
+            .add_field(name=(await translate(curLang, 'serverinfo.verified')), value=server.verified and 'Yes' or 'No', inline=True) \
+            .add_field(name=(await translate(curLang, 'serverinfo.timezone')), value=str(server.timezone), inline=True) \
+            .add_field(name=(await translate(curLang, 'serverinfo.created')), value=format_timespan(datetime.now() - server.created_at), inline=True) \
+            .add_field(name=(await translate(curLang, 'serverinfo.type')), value=server.type.name.capitalize(), inline=True)
+            await ctx.reply(embed=em, silent=True)
+        
+        serverinfo.cog = cog
+
+        @bot.command()
         async def support(_, ctx: commands.Context):
             """Get a link to the support server"""
             user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
@@ -1592,5 +1619,11 @@ class GeneralModule(Module):
             requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
                 'active': True
             }, headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+
+            requests.patch(f'http://localhost:5000/getguilduser/{event.server_id}/{event.server.owner_id}', json={
+                'permission_level': 4
+                }, headers={
                 'authorization': bot_config.SECRET_KEY
             })
