@@ -281,6 +281,32 @@ class ModerationModule(Module):
                 await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.unmute.success', {'mention': user.mention})))
         
         unmute.cog = cog
+
+        @bot.command()
+        async def purge(_, ctx: commands.Context, amount: str):
+            """[Moderator+] Purge up to 50 messages in the current channel"""
+            await self.validate_permission_level(1, ctx)
+
+            try:
+                amount = int(amount)
+
+                messages = await ctx.channel.history(limit=amount)
+                purged = 0
+                for message in messages:
+                    try:
+                        await message.delete()
+                        purged += 1
+                    except:
+                        pass
+
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(ctx.message.language, 'command.purge.results', {
+                    'amount': str(purged),
+                    'total': str(amount)
+                })), private=True)
+            except ValueError:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(ctx.message.language, 'command.error.number')), private=True)
+        
+        purge.cog = cog
         
         @bot.command()
         async def warn(_, ctx: commands.Context, target: str, timespan: str=None, *_reason):
@@ -831,6 +857,8 @@ class ModerationModule(Module):
         bot.message_update_listeners.append(on_message_update)
 
         async def on_message_delete(event: MessageDeleteEvent):
+            if not event.message:
+                return
             if event.message.author.bot or event.channel_id == LOGIN_CHANNEL_ID:
                 return
             guild_data: dict = self.get_guild_data(event.server_id)
