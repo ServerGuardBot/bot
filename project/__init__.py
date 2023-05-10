@@ -7,6 +7,7 @@ from nsfw_detector import predict as nsfw_detect
 from zipfile import ZipFile
 from project.helpers.Cache import Cache
 from project.helpers.embeds import *
+from bs4 import BeautifulSoup
 
 from project.modules.base import Module
 
@@ -159,8 +160,10 @@ async def get_public_guild(guild_id):
         return None
 
 malicious_urls = {}
+guilded_paths = []
 
 def load_malicious_url_db():
+    global malicious_urls
     try:
         req = requests.get('https://urlhaus.abuse.ch/downloads/csv/')
         zip = ZipFile(io.BytesIO(req.content))
@@ -176,7 +179,7 @@ def load_malicious_url_db():
     except Exception as e:
         print('WARNING: urlhaus API down, malicious URLs not being reloaded.')
 
-async def run_analytics_loop():
+async def run_hourly_loop():
     while True:
         requests.post('http://localhost:5000/analytics/servers', headers={
             'authorization': bot_config.SECRET_KEY
@@ -184,6 +187,18 @@ async def run_analytics_loop():
         requests.post('http://localhost:5000/analytics/users', headers={
             'authorization': bot_config.SECRET_KEY
         })
+        try:
+            global guilded_paths
+            guilded_paths.clear()
+            req = requests.get('https://www.guilded.gg/sitemap_landing.xml')
+            soup = BeautifulSoup(req.text, "xml")
+            for tag in soup.find_all('url'):
+                loc = tag.loc
+                if loc is not None:
+                    guilded_paths.append(loc.string[23:].lower())
+        except Exception as e:
+            print(f'WARNING: failed to get Guilded official paths because "{e}"')
+        print('\n'.join(guilded_paths))
         await asyncio.sleep(60 * 60) # Only runs once an hour
 
 async def run_url_db_dl():
@@ -244,7 +259,7 @@ async def on_ready():
     client.loop.create_task(run_bot_loop())
     client.loop.create_task(run_url_db_dl())
     client.loop.create_task(run_feed_loop())
-    client.loop.create_task(run_analytics_loop())
+    client.loop.create_task(run_hourly_loop())
     client.loop.create_task(run_cleanup_loop())
     print('Bot ready')
 

@@ -36,6 +36,7 @@ levenshtein = "*"
 feedparser = "*"
 markdownify = "*"
 psutil = "*"
+lxml = "*"
 
 [dev-packages]
 

@@ -5,7 +5,7 @@ from project.helpers.images import *
 from project.helpers.Cache import Cache
 from project.helpers.translator import translate
 from project.modules.base import Module
-from project import bot_config, BotAPI, malicious_urls
+from project import bot_config, BotAPI, malicious_urls, guilded_paths
 from guilded.ext import commands
 from guilded import Embed, Colour, Forbidden, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
 from humanfriendly import parse_timespan, format_timespan
@@ -675,7 +675,15 @@ class ModerationModule(Module):
 
             if config.get('invite_link_filter', 0) == 1:
                 for domain, invite in re.findall(SERVER_INVITE_REGEX, message.content):
-                    if '/' in invite and not 'i/' in invite and not 'r/' in invite:
+                    lowered = invite.lower()
+                    if '/' in invite and not 'i/' in lowered and not 'r/' in lowered:
+                        continue
+                    stop = False
+                    for path in guilded_paths:
+                        if path in lowered:
+                            stop = True
+                            break
+                    if stop:
                         continue
                     if isinstance(message, ChatMessage):
                         await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.invite_link')), private=True)
