@@ -315,6 +315,7 @@ class ExpiredStatuses(MethodView):
                 for status in contents:
                     status: GuildUserStatus = status
                     guild: Guild = Guild.query.filter_by(guild_id = status.guild_id).first()
+                    logs_channel = guild.config.get('action_logs_channel', guild.config.get('logs_channel'))
                     user = (await bot_api.get_user(status.user_id))['user']
                     if status.type == 'ban':
                         try:
@@ -329,7 +330,7 @@ class ExpiredStatuses(MethodView):
                             )
                             em.add_field(name='User', value=user['name'])
                             em.add_field(name='Ban Reason', value=status.value['reason'])
-                            await bot_api.create_channel_message(guild.config['logs_channel'], payload={
+                            await bot_api.create_channel_message(logs_channel, payload={
                                 'embeds': [em.to_dict()]
                             })
                         requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/ban', headers={
@@ -349,7 +350,7 @@ class ExpiredStatuses(MethodView):
                             )
                             em.add_field(name='User', value=user['name'])
                             em.add_field(name='Mute Reason', value=status.value['reason'])
-                            await bot_api.create_channel_message(guild.config['logs_channel'], payload={
+                            await bot_api.create_channel_message(logs_channel, payload={
                                 'embeds': [em.to_dict()]
                             })
                         requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/mute', headers={
@@ -364,7 +365,7 @@ class ExpiredStatuses(MethodView):
                             )
                             em.add_field(name='User', value=user['name'])
                             em.add_field(name='Warning Reason', value=status.value['reason'])
-                            await bot_api.create_channel_message(guild.config['logs_channel'], payload={
+                            await bot_api.create_channel_message(logs_channel, payload={
                                 'embeds': [em.to_dict()]
                             })
                         requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/warnings/{get_warning_id(status.guild_id, status.user_id, status.internal_id)}', headers={
