@@ -3,6 +3,7 @@ from threading import Thread
 from dotenv import load_dotenv
 from guilded import Member, MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MessageReactionAddEvent, MessageReactionRemoveEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
 from guilded.ext import commands
+from guilded.http import Route
 from nsfw_detector import predict as nsfw_detect
 from zipfile import ZipFile
 from project.helpers.Cache import Cache
@@ -161,6 +162,8 @@ async def get_public_guild(guild_id):
 
 malicious_urls = {}
 guilded_paths = []
+current_status = -1
+server_count = 0
 
 def load_malicious_url_db():
     global malicious_urls
@@ -178,6 +181,26 @@ def load_malicious_url_db():
             malicious_urls[url] = threat
     except Exception as e:
         print('WARNING: urlhaus API down, malicious URLs not being reloaded.')
+
+async def alternate_status():
+    global current_status
+    global server_count
+    current_status += 1
+    payload = None
+    if current_status > 1:
+        current_status = 0
+    if current_status == 0:
+        payload = {
+            'content': '/help • serverguard.xyz',
+            'emoteId': 1487999,
+        }
+    elif current_status == 1:
+        payload = {
+            'content': f'Protecting {"{:,}".format(server_count)} Servers',
+            'emoteId': 1904514,
+        }
+    if payload is not None:
+        await client.http.request(Route('PUT', '/users/@me/status'), json=payload)
 
 async def run_hourly_loop():
     while True:
@@ -198,7 +221,6 @@ async def run_hourly_loop():
                     guilded_paths.append(loc.string[23:].lower())
         except Exception as e:
             print(f'WARNING: failed to get Guilded official paths because "{e}"')
-        print('\n'.join(guilded_paths))
         await asyncio.sleep(60 * 60) # Only runs once an hour
 
 async def run_url_db_dl():
@@ -207,6 +229,7 @@ async def run_url_db_dl():
         load_malicious_url_db()
 
 async def run_bot_loop():
+    global server_count
     while True:
         await asyncio.sleep(60)
         requests.post('http://localhost:5000/moderation/expirestatuses', headers={
@@ -215,6 +238,15 @@ async def run_bot_loop():
         requests.post('http://localhost:5000/giveaways/check', headers={
             'authorization': bot_config.SECRET_KEY
         })
+        try:
+            server_request = requests.get('http://localhost:5000/analytics/servers/count', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            if server_request.ok:
+                server_count = server_request.json().get('value', server_count)
+            await alternate_status()
+        except Exception as e:
+            print(f'WARNING: failed to alternate status because "{e}"')
 
 async def run_feed_loop():
     while True:

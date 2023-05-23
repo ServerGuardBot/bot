@@ -351,6 +351,20 @@ class LargestServersResource(MethodView):
             'members': server.members
         } for server in guilds]), 200
 
+class ServerCountResource(MethodView):
+    """ Get the server count of the bot """
+    async def get(self):
+        auth = request.headers.get('authorization')
+
+        if auth != app.config.get('SECRET_KEY'):
+            return 'Forbidden.', 403
+
+        return jsonify({
+            'value': db.session.query(Guild.active) \
+                .filter(Guild.active) \
+                .count()
+        }), 200
+
 class BotDataResource(MethodView):
     """ Bot Data Resource """
     async def get(self, key):
@@ -428,6 +442,7 @@ data_blueprint.add_url_rule('/analytics/servers/dash/<days>', view_func=Analytic
 data_blueprint.add_url_rule('/analytics/servers/largest', view_func=LargestServersResource.as_view('largest_servers'))
 data_blueprint.add_url_rule('/analytics/servers/unindexed', view_func=NoneServersResource.as_view('none_servers'))
 data_blueprint.add_url_rule('/analytics/servers/active', view_func=ActiveServersResource.as_view('active_servers'))
+data_blueprint.add_url_rule('/analytics/servers/count', view_func=ServerCountResource.as_view('server_count'))
 
 data_blueprint.add_url_rule('/analytics/servers', view_func=ServerAnalyticsResource.as_view('server_analytics'))
 data_blueprint.add_url_rule('/analytics/servers/<year>', view_func=ServerAnalyticsResource.as_view('server_analytics_y'))
