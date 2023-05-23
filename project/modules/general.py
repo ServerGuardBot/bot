@@ -348,7 +348,7 @@ class GeneralModule(Module):
             .add_field(name=(await translate(curLang, 'serverinfo.owner')), value=f'<@{server.owner_id}>', inline=True) \
             .add_field(name=(await translate(curLang, 'serverinfo.members')), value=server.member_count, inline=True) \
             .add_field(name=(await translate(curLang, 'serverinfo.verified')), value=server.verified and 'Yes' or 'No', inline=True) \
-            .add_field(name=(await translate(curLang, 'serverinfo.timezone')), value=str(server.timezone), inline=True) \
+            .add_field(name=(await translate(curLang, 'serverinfo.timezone')), value=server.timezone and server.timezone.key or 'None', inline=True) \
             .add_field(name=(await translate(curLang, 'serverinfo.created')), value=format_timespan(datetime.now() - server.created_at), inline=True) \
             .add_field(name=(await translate(curLang, 'serverinfo.type')), value=server.type.name.capitalize(), inline=True)
             await ctx.reply(embed=em, silent=True)
