@@ -9,6 +9,7 @@ from zipfile import ZipFile
 from project.helpers.Cache import Cache
 from project.helpers.embeds import *
 from bs4 import BeautifulSoup
+from project.helpers.translator import translate
 
 from project.modules.base import Module
 
@@ -318,6 +319,19 @@ async def on_message(event: MessageEvent):
         message.language = user_data_req.json().get('language', 'en')
     else:
         message.language = 'en'
+    
+    if message.content.strip() == f'<@{client.user_id}>':
+        await message.reply(
+            embed=Embed(
+                title=await translate(message.language, 'link.support'),
+                description=await translate(message.language, "bot.prefix_response", {
+                    'member_id': message.author_id,
+                    'prefix': '/'
+                })
+            ) \
+                .set_footer(text='Server Guard') \
+                .set_thumbnail(url='https://img.guildedcdn.com/UserAvatar/6dc417befe51bbca91b902984f113f89-Small.webp?w=80&h=80')
+        )
     
     await client.process_commands(message)
     for callback in client.message_listeners:
