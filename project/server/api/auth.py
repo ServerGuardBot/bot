@@ -250,6 +250,7 @@ config_handlers = {
     'action_logs_channel': handle_channel_config,
     'user_logs_channel': handle_channel_config,
     'management_logs_channel': handle_channel_config,
+    'log_role_changes': handle_bool_config,
     'verified_role': handle_role_config,
     'unverified_role': handle_role_config,
     'mute_role': handle_role_config,
