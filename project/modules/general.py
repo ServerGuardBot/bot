@@ -1570,7 +1570,6 @@ class GeneralModule(Module):
                         await event.channel.send(embed=em, private=True, delete_after=10)
         bot.reaction_add_listeners.append(on_message_reaction_add)
 
-        @bot.event
         async def on_server_channel_create(event: ServerChannelCreateEvent):
             channel = await event.server.getch_channel(event.channel.id)
             channel_payload = [{
@@ -1582,8 +1581,8 @@ class GeneralModule(Module):
             requests.put(f'http://localhost:5000/data/cache/{event.server_id}/channels', headers={
                 'authorization': bot_config.SECRET_KEY
             }, json=channel_payload)
+        bot.channel_create_listeners.append(on_server_channel_create)
         
-        @bot.event
         async def on_server_channel_delete(event: ServerChannelDeleteEvent):
             channel = event.channel
             channel_payload = [{
@@ -1592,6 +1591,7 @@ class GeneralModule(Module):
             requests.delete(f'http://localhost:5000/data/cache/{event.server_id}/channels', headers={
                 'authorization': bot_config.SECRET_KEY
             }, json=channel_payload)
+        bot.channel_delete_listeners.append(on_server_channel_delete)
 
         @bot.event
         async def on_bot_remove(event: BotRemoveEvent):

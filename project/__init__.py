@@ -1,7 +1,11 @@
 from datetime import datetime
 from threading import Thread
 from dotenv import load_dotenv
-from guilded import Member, MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MessageReactionAddEvent, MessageReactionRemoveEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, http
+from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, MessageReactionAddEvent, MessageReactionRemoveEvent, MemberJoinEvent, \
+    MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, \
+    ForumTopicUpdateEvent, ServerChannelCreateEvent, ServerChannelDeleteEvent, ServerChannelUpdateEvent, ForumTopicLockEvent, \
+    ForumTopicUnlockEvent, ForumTopicPinEvent, ForumTopicUnpinEvent, ForumTopicReplyCreateEvent, ForumTopicReplyDeleteEvent, \
+    ForumTopicReplyUpdateEvent, AnnouncementReplyCreateEvent, AnnouncementReplyUpdateEvent, AnnouncementReplyDeleteEvent, http
 from guilded.ext import commands
 from guilded.http import Route
 from nsfw_detector import predict as nsfw_detect
@@ -138,11 +142,24 @@ class BotClient(commands.Bot):
     topic_create_listeners: list = []
     topic_update_listeners: list = []
     topic_delete_listeners: list = []
+    topic_pin_listeners: list = []
+    topic_unpin_listeners: list = []
+    topic_lock_listeners: list = []
+    topic_unlock_listeners: list = []
+    topic_reply_create_listeners: list = []
+    topic_reply_update_listeners: list = []
+    topic_reply_delete_listeners: list = []
     member_role_update_listeners: list = []
     ban_create_listeners: list = []
     ban_delete_listeners: list = []
     reaction_add_listeners: list = []
     reaction_remove_listeners: list = []
+    channel_create_listeners: list = []
+    channel_update_listeners: list = []
+    channel_delete_listeners: list = []
+    announcement_reply_create_listeners: list = []
+    announcement_reply_update_listeners: list = []
+    announcement_reply_delete_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
 
@@ -413,6 +430,86 @@ async def on_forum_topic_delete(event: ForumTopicDeleteEvent):
             print('Failed to run forum topic delete listener:', e)
 
 @client.event
+async def on_forum_topic_pin(event: ForumTopicPinEvent):
+    for callback in client.topic_pin_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic pin listener:', e)
+
+@client.event
+async def on_forum_topic_unpin(event: ForumTopicUnpinEvent):
+    for callback in client.topic_unpin_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic unpin listener:', e)
+
+@client.event
+async def on_forum_topic_lock(event: ForumTopicLockEvent):
+    for callback in client.topic_lock_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic lock listener:', e)
+
+@client.event
+async def on_forum_topic_unlock(event: ForumTopicUnlockEvent):
+    for callback in client.topic_unlock_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic unlock listener:', e)
+
+@client.event
+async def on_forum_topic_reply_create(event: ForumTopicReplyCreateEvent):
+    for callback in client.topic_reply_create_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic reply create listener:', e)
+
+@client.event
+async def on_forum_topic_reply_update(event: ForumTopicReplyUpdateEvent):
+    for callback in client.topic_reply_update_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic reply update listener:', e)
+
+@client.event
+async def on_forum_topic_reply_delete(event: ForumTopicReplyDeleteEvent):
+    for callback in client.topic_reply_delete_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run forum topic reply delete listener:', e)
+
+@client.event
+async def on_announcement_reply_create(event: AnnouncementReplyCreateEvent):
+    for callback in client.announcement_reply_create_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run announcement reply create listener:', e)
+
+@client.event
+async def on_announcement_reply_update(event: AnnouncementReplyUpdateEvent):
+    for callback in client.announcement_reply_update_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run announcement reply update listener:', e)
+
+@client.event
+async def on_announcement_reply_delete(event: AnnouncementReplyDeleteEvent):
+    for callback in client.announcement_reply_delete_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run announcement reply delete listener:', e)
+
+@client.event
 async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
     for callback in client.member_role_update_listeners:
         try:
@@ -435,6 +532,30 @@ async def on_message_reaction_remove(event: MessageReactionRemoveEvent):
             await callback(event)
         except Exception as e:
             print('Failed to run reaction remove listener:', e)
+
+@client.event
+async def on_server_channel_create(event: ServerChannelCreateEvent):
+    for callback in client.channel_create_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run channel create listener:', e)
+
+@client.event
+async def on_server_channel_update(event: ServerChannelUpdateEvent):
+    for callback in client.channel_update_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run channel update listener:', e)
+
+@client.event
+async def on_server_channel_delete(event: ServerChannelDeleteEvent):
+    for callback in client.channel_delete_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run channel delete listener:', e)
 
 if not os.getenv('MIGRATING_DB', '0') == '1':
     print('Registering Modules')

@@ -248,6 +248,8 @@ config_handlers = {
     'welcome_channel': handle_channel_config,
     'verify_logs_channel': handle_channel_config,
     'action_logs_channel': handle_channel_config,
+    'user_logs_channel': handle_channel_config,
+    'management_logs_channel': handle_channel_config,
     'verified_role': handle_role_config,
     'unverified_role': handle_role_config,
     'mute_role': handle_role_config,

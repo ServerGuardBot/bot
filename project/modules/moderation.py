@@ -7,7 +7,11 @@ from project.helpers.translator import translate
 from project.modules.base import Module
 from project import bot_config, BotAPI, malicious_urls, guilded_paths
 from guilded.ext import commands
-from guilded import Embed, Colour, Forbidden, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, ChatMessage, ForumTopic, http
+from guilded import Embed, Colour, Forbidden, BulkMemberRolesUpdateEvent, MemberJoinEvent, MemberRemoveEvent, BanCreateEvent, \
+    BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, \
+    ChatMessage, ForumTopic, WebhookCreateEvent, WebhookUpdateEvent, ServerChannelCreateEvent, ServerChannelDeleteEvent, \
+    ServerChannelUpdateEvent, ForumTopicReplyCreateEvent, ForumTopicReplyDeleteEvent, ForumTopicReplyUpdateEvent, \
+    AnnouncementReplyCreateEvent, AnnouncementReplyUpdateEvent, AnnouncementReplyDeleteEvent, http
 from humanfriendly import parse_timespan, format_timespan
 from better_profanity import Profanity
 from unidecode import unidecode
@@ -923,7 +927,7 @@ class ModerationModule(Module):
                 else:
                     cached_spam.append(message)
                     spam_cache.set(f'{message.guild.id}/{message.author_id}', cached_spam)
-        self.bot.message_listeners.append(on_message)
+        bot.message_listeners.append(on_message)
 
         async def on_forum_topic_create(event: ForumTopicCreateEvent):
             if event.topic.author.bot:
@@ -933,7 +937,7 @@ class ModerationModule(Module):
                 return
             if await handle_text_message(event.topic):
                 return
-        self.bot.topic_create_listeners.append(on_forum_topic_create)
+        bot.topic_create_listeners.append(on_forum_topic_create)
 
         async def on_forum_topic_update(event: ForumTopicUpdateEvent):
             if event.topic.author.bot:
@@ -961,7 +965,7 @@ class ModerationModule(Module):
                 em.add_field(name='Edited topic contents', value=event.topic.content, inline=False)
                 em.set_thumbnail(url=member.avatar.aws_url)
                 await channel.send(embed=em)
-        self.bot.topic_update_listeners.append(on_forum_topic_update)
+        bot.topic_update_listeners.append(on_forum_topic_update)
 
         async def on_forum_topic_delete(event: ForumTopicDeleteEvent):
             if event.topic.author.bot:
@@ -985,4 +989,243 @@ class ModerationModule(Module):
                     em.add_field(name='Deleted topic contents', value=event.topic.content, inline=False)
                     em.set_thumbnail(url=member.avatar.aws_url)
                     await channel.send(embed=em)
-        self.bot.topic_delete_listeners.append(on_forum_topic_delete)
+        bot.topic_delete_listeners.append(on_forum_topic_delete)
+
+        async def on_forum_topic_reply_create(event: ForumTopicReplyCreateEvent):
+            if event.reply.author.bot:
+                return
+            member = await event.server.getch_member(event.reply.author_id)
+            if (await self.is_moderator(member)) or await self.user_can_manage_server(member):
+                return
+            if await handle_text_message(event.reply):
+                return
+        bot.topic_reply_create_listeners.append(on_forum_topic_reply_create)
+
+        async def on_forum_topic_reply_update(event: ForumTopicReplyUpdateEvent):
+            if event.reply.author.bot:
+                return
+            member = await event.server.getch_member(event.reply.author_id)
+            if (await self.is_moderator(member)) or await self.user_can_manage_server(member):
+                return
+            if await handle_text_message(event.reply):
+                return
+            guild_data: dict = self.get_guild_data(event.server_id)
+            message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
+
+            if message_log_channel is not None and message_log_channel != '':
+                channel = await bot.getch_channel(message_log_channel)
+                member = event.reply.author
+                em = Embed(
+                    title=f'Topic reply  edited in {event.reply.channel.name}',
+                    url=event.topic.share_url,
+                    colour=Colour.gilded(),
+                    timestamp=datetime.now()
+                )
+                em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                em.add_field(name='ID', value=member.id)
+                em.add_field(name='Topic title', value=event.topic.title, inline=False)
+                em.add_field(name='Edited reply contents', value=event.reply.content, inline=False)
+                em.set_thumbnail(url=member.avatar.aws_url)
+                await channel.send(embed=em)
+        bot.topic_reply_update_listeners.append(on_forum_topic_reply_update)
+
+        async def on_forum_topic_reply_delete(event: ForumTopicReplyDeleteEvent):
+            if event.reply.author.bot:
+                return
+            guild_data: dict = self.get_guild_data(event.server_id)
+            message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
+
+            if message_log_channel is not None and message_log_channel != '':
+                if event.reply is not None:
+                    channel = await bot.getch_channel(message_log_channel)
+                    member = event.reply.author
+                    em = Embed(
+                        title=f'Topic reply deleted in {event.reply.channel.name}',
+                        url=event.topic.share_url,
+                        colour=Colour.red(),
+                        timestamp=datetime.now()
+                    )
+                    em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                    em.add_field(name='ID', value=member.id)
+                    em.add_field(name='Topic title', value=event.topic.title, inline=False)
+                    em.add_field(name='Deleted reply contents', value=event.reply.content, inline=False)
+                    await channel.send(embed=em)
+        bot.topic_reply_delete_listeners.append(on_forum_topic_reply_delete)
+
+        async def on_announcement_reply_create(event: AnnouncementReplyCreateEvent):
+            if event.reply.author.bot:
+                return
+            member = await event.server.getch_member(event.reply.author_id)
+            if (await self.is_moderator(member)) or await self.user_can_manage_server(member):
+                return
+            if await handle_text_message(event.reply):
+                return
+        bot.announcement_reply_create_listeners.append(on_announcement_reply_create)
+        
+        async def on_announcement_reply_update(event: AnnouncementReplyUpdateEvent):
+            if event.reply.author.bot:
+                return
+            if await handle_text_message(event.reply):
+                return
+            guild_data: dict = self.get_guild_data(event.server_id)
+            message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
+
+            if message_log_channel is not None and message_log_channel != '':
+                channel = await bot.getch_channel(message_log_channel)
+                member = event.reply.author
+                em = Embed(
+                    title=f'Announcement reply edited in {event.reply.channel.name}',
+                    url=event.announcement.share_url,
+                    colour=Colour.gilded(),
+                    timestamp=datetime.now()
+                )
+                em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                em.add_field(name='ID', value=member.id)
+                em.add_field(name='Announcement title', value=event.announcement.title, inline=False)
+                em.add_field(name='Edited reply contents', value=event.reply.content, inline=False)
+                em.set_thumbnail(url=member.avatar.aws_url)
+                await channel.send(embed=em)
+        bot.announcement_reply_update_listeners.append(on_announcement_reply_update)
+        
+        async def on_announcement_reply_delete(event: AnnouncementReplyDeleteEvent):
+            if event.reply.author.bot:
+                return
+            if event.reply is not None:
+                guild_data: dict = self.get_guild_data(event.server_id)
+                message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
+
+                if message_log_channel is not None and message_log_channel != '':
+                    channel = await bot.getch_channel(message_log_channel)
+                    member = event.reply.author
+                    em = Embed(
+                        title=f'Announcement reply deleted in {event.reply.channel.name}',
+                        url=event.announcement.share_url,
+                        colour=Colour.red(),
+                        timestamp=datetime.now()
+                    )
+                    em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                    await channel.send(embed=em)
+        bot.announcement_reply_delete_listeners.append(on_announcement_reply_delete)
+
+        async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
+            guild_data: dict = self.get_guild_data(event.server_id)
+            config = guild_data.get('config', {})
+            user_log_channel = config.get('user_logs_channel')
+
+            if user_log_channel is not None and user_log_channel != '':
+                channel = await bot.getch_channel(user_log_channel)
+                if config.get('log_role_changes'):
+                    for member_after in event.after:
+                        for before in event.before:
+                            if before.id == member_after.id:
+                                member_before = before
+                                break
+                        if member_before:
+                            added, removed = [], []
+                            for role in member_before.roles:
+                                if role not in member_after.roles:
+                                    removed.append(role)
+                            for role in member_after.roles:
+                                if role not in member_before.roles:
+                                    added.append(role)
+                            # Generate log embed
+                            em = Embed(
+                                title=f'Roles changed for <@{member_after.id}>',
+                                colour=Colour.gilded(),
+                                timestamp=datetime.now(),
+                                url=member_after.profile_url
+                            ) \
+                                .set_thumbnail(url=member_after.avatar.aws_url)
+                            if len(added) > 0:
+                                em.add_field(name='Added roles', value=', '.join([f'<@{role.id}>' for role in added]))
+                            if len(removed) > 0:
+                                em.add_field(name='Removed roles', value=', '.join([f'<@{role.id}>' for role in removed]))
+                            
+                            if len(removed) > 0 and len(added) > 0:
+                                await channel.send(embed=em, silent=True)
+        bot.member_role_update_listeners.append(on_bulk_member_roles_update)
+
+        async def on_server_channel_create(event: ServerChannelCreateEvent):
+            guild_data: dict = self.get_guild_data(event.server_id)
+            config = guild_data.get('config', {})
+            mgmt_log_channel = config.get('management_logs_channel')
+
+            if mgmt_log_channel is not None and mgmt_log_channel != '':
+                channel = await bot.getch_channel(mgmt_log_channel)
+                em = Embed(
+                    title=f'Channel created in {event.channel.name}',
+                    url=event.channel.share_url,
+                    colour=Colour.green(),
+                    timestamp=datetime.now()
+                )
+                await channel.send(embed=em)
+        bot.channel_create_listeners.append(on_server_channel_create)
+        
+        async def on_server_channel_update(event: ServerChannelUpdateEvent):
+            guild_data: dict = self.get_guild_data(event.server_id)
+            config = guild_data.get('config', {})
+            mgmt_log_channel = config.get('management_logs_channel')
+
+            if mgmt_log_channel is not None and mgmt_log_channel != '':
+                channel = await bot.getch_channel(mgmt_log_channel)
+                em = Embed(
+                    title=f'Channel updated in {event.channel.name}',
+                    url=event.channel.share_url,
+                    colour=Colour.gilded(),
+                    timestamp=event.channel.created_at
+                )
+                await channel.send(embed=em)
+        bot.channel_update_listeners.append(on_server_channel_update)
+        
+        async def on_server_channel_delete(event: ServerChannelDeleteEvent):
+            guild_data: dict = self.get_guild_data(event.server_id)
+            config = guild_data.get('config', {})
+            mgmt_log_channel = config.get('management_logs_channel')
+
+            if mgmt_log_channel is not None and mgmt_log_channel != '':
+                channel = await bot.getch_channel(mgmt_log_channel)
+                em = Embed(
+                    title=f'Channel deleted in {event.channel.name}',
+                    url=event.channel.share_url,
+                    colour=Colour.red(),
+                    timestamp=datetime.now()
+                )
+                await channel.send(embed=em)
+        bot.channel_delete_listeners.append(on_server_channel_delete)
+
+        # TODO: Translate these events into callback handlers in init
+        @bot.event
+        async def on_webhook_create(event: WebhookCreateEvent):
+            guild_data: dict = self.get_guild_data(event.server_id)
+            config = guild_data.get('config', {})
+            mgmt_log_channel = config.get('management_logs_channel')
+
+            if mgmt_log_channel is not None and mgmt_log_channel != '':
+                channel = await bot.getch_channel(mgmt_log_channel)
+                em = Embed(
+                    title=f'Webhook created in {event.webhook.channel.name}',
+                    url=event.webhook.channel.share_url,
+                    colour=Colour.gilded(),
+                    timestamp=event.webhook.created_at
+                ) \
+                    .set_thumbnail(url=event.webhook.display_avatar.aws_url) \
+                    .add_field(name='Created By',  value=f'<@{event.webhook.created_by_id}>')
+                await channel.send(embed=em)
+
+        @bot.event
+        async def on_webhook_update(event: WebhookUpdateEvent):
+            guild_data: dict = self.get_guild_data(event.server_id)
+            config = guild_data.get('config', {})
+            mgmt_log_channel = config.get('management_logs_channel')
+
+            if mgmt_log_channel is not None and mgmt_log_channel != '':
+                channel = await bot.getch_channel(mgmt_log_channel)
+                em = Embed(
+                    title=f'Webhook {event.webhook.deleted_at and "deleted" or "updated"} in {event.webhook.channel.name}',
+                    url=event.webhook.channel.share_url,
+                    colour=Colour.gilded(),
+                    timestamp=event.webhook.deleted_at or event.webhook.created_at
+                ) \
+                    .set_thumbnail(url=event.webhook.display_avatar.aws_url) \
+                    .add_field(name='Created By',  value=f'<@{event.webhook.created_by_id}>')
+                await channel.send(embed=em)
