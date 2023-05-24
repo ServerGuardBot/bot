@@ -1116,17 +1116,18 @@ class ModerationModule(Module):
                 channel = await bot.getch_channel(user_log_channel)
                 if config.get('log_role_changes'):
                     for member_after in event.after:
+                        member_before = None
                         for before in event.before:
                             if before.id == member_after.id:
                                 member_before = before
                                 break
                         if member_before:
                             added, removed = [], []
-                            for role in member_before.roles:
-                                if role not in member_after.roles:
+                            for role in member_before._role_ids:
+                                if role not in member_after._role_ids:
                                     removed.append(role)
-                            for role in member_after.roles:
-                                if role not in member_before.roles:
+                            for role in member_after._role_ids:
+                                if role not in member_before._role_ids:
                                     added.append(role)
                             # Generate log embed
                             em = Embed(
@@ -1137,11 +1138,11 @@ class ModerationModule(Module):
                             ) \
                                 .set_thumbnail(url=member_after.avatar.aws_url)
                             if len(added) > 0:
-                                em.add_field(name='Added roles', value=', '.join([f'<@{role.id}>' for role in added]))
+                                em.add_field(name='Added roles', value=', '.join([f'<@{role}>' for role in added]))
                             if len(removed) > 0:
-                                em.add_field(name='Removed roles', value=', '.join([f'<@{role.id}>' for role in removed]))
+                                em.add_field(name='Removed roles', value=', '.join([f'<@{role}>' for role in removed]))
                             
-                            if len(removed) > 0 and len(added) > 0:
+                            if len(removed) > 0 or len(added) > 0:
                                 await channel.send(embed=em, silent=True)
         bot.member_role_update_listeners.append(on_bulk_member_roles_update)
 
@@ -1153,7 +1154,7 @@ class ModerationModule(Module):
             if mgmt_log_channel is not None and mgmt_log_channel != '':
                 channel = await bot.getch_channel(mgmt_log_channel)
                 em = Embed(
-                    title=f'Channel created in {event.channel.name}',
+                    title=f'Channel "{event.channel.name}" created',
                     url=event.channel.share_url,
                     colour=Colour.green(),
                     timestamp=datetime.now()
@@ -1169,7 +1170,7 @@ class ModerationModule(Module):
             if mgmt_log_channel is not None and mgmt_log_channel != '':
                 channel = await bot.getch_channel(mgmt_log_channel)
                 em = Embed(
-                    title=f'Channel updated in {event.channel.name}',
+                    title=f'Channel "{event.channel.name}" updated',
                     url=event.channel.share_url,
                     colour=Colour.gilded(),
                     timestamp=event.channel.created_at
@@ -1185,7 +1186,7 @@ class ModerationModule(Module):
             if mgmt_log_channel is not None and mgmt_log_channel != '':
                 channel = await bot.getch_channel(mgmt_log_channel)
                 em = Embed(
-                    title=f'Channel deleted in {event.channel.name}',
+                    title=f'Channel "{event.channel.name}" deleted',
                     url=event.channel.share_url,
                     colour=Colour.red(),
                     timestamp=datetime.now()
