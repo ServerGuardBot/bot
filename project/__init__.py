@@ -302,15 +302,20 @@ async def run_cleanup_loop():
 if not os.getenv('MIGRATING_DB', '0') == '1':
     load_malicious_url_db()
 
+tasks_made = False
 @client.event
 async def on_ready():
+    global tasks_made
     await client.wait_until_ready()
     print(f'Logged in as {client.user.name}')
-    client.loop.create_task(run_bot_loop())
-    client.loop.create_task(run_url_db_dl())
-    client.loop.create_task(run_feed_loop())
-    client.loop.create_task(run_hourly_loop())
-    client.loop.create_task(run_cleanup_loop())
+    if not tasks_made:
+        print('Created tasks for loops')
+        client.loop.create_task(run_bot_loop())
+        client.loop.create_task(run_url_db_dl())
+        client.loop.create_task(run_feed_loop())
+        client.loop.create_task(run_hourly_loop())
+        client.loop.create_task(run_cleanup_loop())
+        tasks_made = True
     print('Bot ready')
 
 @client.event
