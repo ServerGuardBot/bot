@@ -212,9 +212,9 @@ class GiveawayResource(MethodView):
                 }
             )
             message_id = response['message']['id']
-            await bot_api.add_reaction_emote(
+            await bot_api.add_channel_message_reaction(
                 channel_id=channel_id,
-                content_id=message_id,
+                message_id=message_id,
                 emote_id=90001815
             ) # 90001815 = tada
         
