@@ -324,7 +324,9 @@ async def on_message(event: MessageEvent):
     server = await get_public_guild(event.server_id)
     # Replace all mentions that it can in the message with properly parseable formats
     for member in message.user_mentions:
-        message.content = message.content.replace(f'@{member.display_name}', f'<@{member.id}>')
+        message.content = message.content.replace(f'@{member.name}', f'<@{member.id}>')
+        if member.nick:
+            message.content = message.content.replace(f'@{member.nick}', f'<@{member.id}>')
     if server is not None:
         for role_id in message.raw_role_mentions:
             role = server.get_role(role_id)
