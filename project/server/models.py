@@ -77,6 +77,29 @@ class Guild(db.Model):
     def __repr__(self):
         return f'<Guild {self.guild_id}>'
 
+class GuildActivity(db.Model):
+    """ Guild Activity model for storing guild activity logs """
+    __tablename__ = 'guildactivity'
+
+    internal_id = db.Column(db.String(500), primary_key=True)
+    guild_id = db.Column(db.String(500), nullable=False)
+    activity_id = db.Column(db.String(500), nullable=False)
+
+    user_id = db.Column(db.String(500), nullable=True)
+    logged_at = db.Column(db.DateTime, nullable=False)
+    action = db.Column(NestedMutableJson, nullable=False)
+
+    def __init__(self, guild_id: str, user_id: str, action: dict):
+        self.activity_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=32))
+        self.internal_id = f'{guild_id}/{self.activity_id}'
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.logged_at = datetime.now()
+        self.action = action
+    
+    def __repr__(self):
+        return f'<GuildActivity {self.internal_id}>'
+
 class GuildUser(db.Model):
     """ Guild User model for storing guild user-related data """
     __tablename__ = 'guildusers'

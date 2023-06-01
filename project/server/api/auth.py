@@ -15,9 +15,10 @@ from flask import Blueprint, request, jsonify, make_response
 from flask.views import MethodView
 from project import app, db, get_shared_state, BotAPI
 from project.helpers.Cache import Cache
+from project.helpers.images import *
 from guilded import http
 
-from project.server.models import GuildUser, UserInfo, Guild, BlacklistedRefreshToken
+from project.server.models import GuildUser, UserInfo, Guild, BlacklistedRefreshToken, GuildActivity
 
 AUTH_TOKEN_EXPIRY = 60 * 60 # Auth tokens expire after an hour
 REFRESH_TOKEN_EXPIRY = 60 * 60 * 24 * 14 # Refresh tokens expire after two weeks
@@ -344,6 +345,53 @@ class ServerConfigResource(MethodView):
             else:
                 return 'Forbidden', 403
 
+def get_user(user_id: str):
+    user: UserInfo = UserInfo.query \
+        .filter(UserInfo.user_id == user_id) \
+        .first()
+    
+    if user is None:
+        return {
+            'id': user_id,
+            'name': f'Unknown <{user_id}>',
+            'avatar': IMAGE_DEFAULT_AVATAR
+        }
+    else:
+        return {
+            'id': user_id,
+            'name': user.name,
+            'avatar': user.avatar
+        }
+
+class ServerActivityResource(MethodView):
+    async def get(self, guild_id: str, start_index: int):
+        auth = get_user_auth()
+
+        guild_user: GuildUser = GuildUser.query \
+            .filter(GuildUser.guild_id == guild_id) \
+            .filter(GuildUser.user_id == auth) \
+            .first()
+        
+        if guild_user is not None and guild_user.permission_level > 2:
+            activity = GuildActivity.query \
+                .filter(GuildActivity.guild_id == guild_id) \
+                .order_by(GuildActivity.logged_at.desc()) \
+                .limit(50)
+            if start_index is not None:
+                activity = activity.offset(start_index)
+            activity = activity.all()
+            
+            return jsonify([
+                {
+                    'id': a.activity_id,
+                    'action': a.action,
+                    'user': get_user(a.user_id),
+                    'logged_at': a.logged_at.timestamp()
+                } for a in activity
+            ])
+        else:
+            return 'Forbidden', 403
+
 class LoginResource(MethodView):
     """ Login Resource """
     async def get(self):
@@ -536,3 +584,5 @@ auth_blueprint.add_url_rule('/auth/refresh', view_func=RefreshResource.as_view('
 auth_blueprint.add_url_rule('/db/cleanup', view_func=CleanupResource.as_view('cleanup_db'))
 
 auth_blueprint.add_url_rule('/servers/<guild_id>/config', view_func=ServerConfigResource.as_view('server_config'))
+auth_blueprint.add_url_rule('/servers/<guild_id>/activity', view_func=ServerActivityResource.as_view('server_activity'))
+auth_blueprint.add_url_rule('/servers/<guild_id>/activity/<int:start_index>', view_func=ServerActivityResource.as_view('server_activity_start_index'))
