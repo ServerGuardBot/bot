@@ -176,6 +176,24 @@ class GuildChannelConfig(db.Model):
     def __repr__(self):
         return f'<GuildChannelConfig {self.internal_id}>'
 
+class GuildRoleConfig(db.Model):
+    """ Guild Role Config model for storing guild role configurations """
+    __tablename__ = 'guildroleconfigs'
+    internal_id = db.Column(db.String(500), primary_key=True)
+    unique_id = db.Column(db.String(500), nullable=False)
+    guild_id = db.Column(db.String(500), nullable=False)
+    role_id = db.Column(db.String(500), nullable=False)
+
+    type = db.Column(db.String(500), nullable=False)
+    value = db.Column(NestedMutableJson, nullable=False)
+
+    def __init__(self, guild_id: str, role_id: str, type: str, value: dict):
+        self.unique_id = "".join(random.choices(string.ascii_letters, k=15))
+        self.internal_id = f'{guild_id}/{role_id}/{type}/{self.unique_id}'
+        self.guild_id = guild_id
+        self.role_id = role_id
+        self.type = type
+
 class FeedData(db.Model):
     """ Feed Data model for storing RSS feeds and their information """
     __tablename__ = 'feeddata'
