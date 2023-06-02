@@ -100,6 +100,13 @@ def blacklist_token(refresh: str):
             # Silently fail as the token is already expired or invalid
             pass
 
+def log_guild_activity(guild_id: str, user_id: str, action: dict):
+    activity = GuildActivity(guild_id, user_id, action)
+    db.session.add(activity)
+    db.session.commit()
+
+    return activity.activity_id
+
 def is_guild_active(guild_id: str):
     guild: Guild = Guild.query \
         .filter(Guild.guild_id == guild_id) \
