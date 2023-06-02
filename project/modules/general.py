@@ -5,8 +5,8 @@ from project.helpers.Cache import Cache
 from project import bot_config
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
-from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote
-from guilded import ServerChannelCreateEvent, ServerChannelDeleteEvent
+from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote, \
+    ServerChannelCreateEvent, ServerChannelDeleteEvent, MemberRemoveEvent
 from datetime import datetime
 from humanfriendly import format_timespan
 from project.helpers.translator import getLanguages, translate
@@ -1592,6 +1592,51 @@ class GeneralModule(Module):
                 'authorization': bot_config.SECRET_KEY
             }, json=channel_payload)
         bot.channel_delete_listeners.append(on_server_channel_delete)
+
+        async def on_member_removed(event: MemberRemoveEvent):
+            user = await bot.getch_user(event.user_id)
+            if user.bot:
+                return
+            server = event.server
+            guild_data_req = requests.get(f'http://localhost:5000/guilddata/{event.server_id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            guild_data: dict = guild_data_req.json()
+            config: dict =  guild_data.get('config', {})
+            leave_message: str = config.get('leave_message', 'Goodbye, {mention}, we hope to see you again!')
+            leave_image = config.get('leave_image')
+            welcome_channel_id = config.get('welcome_channel', server.default_channel_id)
+            leave_enabled = config.get('use_leave', 0)
+
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{server.id}/{user.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info: dict = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+
+            if leave_enabled == 1:
+                replacements = {
+                    '{mention}': user.mention,
+                    '{server_name}': server.name
+                }
+
+                for key, value in replacements.items():
+                    leave_message = leave_message.replace(key, value)
+
+                em = Embed(
+                    title=await translate(curLang, 'embed.goodbye'),
+                    description=leave_message,
+                    colour=Colour.gilded()
+                )
+                if leave_image is not None and leave_image != '':
+                    em.set_image(url=leave_image)
+                
+                try:
+                    welcome_channel = await self.bot.getch_channel(welcome_channel_id)
+                    await welcome_channel.send(embed=em)
+                except Exception as e:
+                    print(f'Failed to send leave message in {server.name} ({server.id}) for user {user.name} ({user.id}): {str(e)}')
+        bot.leave_listeners.append(on_member_removed)
 
         @bot.event
         async def on_bot_remove(event: BotRemoveEvent):
