@@ -288,6 +288,39 @@ config_handlers = {
     'leave_message': handle_string_config,
 }
 
+config_types = {
+    'log_commands': 'bool',
+    'silence_commands': 'bool',
+    'log_role_changes': 'bool',
+    'url_filter': 'bool',
+    'automod_duplicate': 'bool',
+    'invite_link_filter': 'bool',
+    'use_welcome': 'bool',
+    'block_tor': 'bool',
+    'raid_guard': 'bool',
+    'untrusted_block_images': 'bool',
+    'use_leave': 'bool',
+    'verification_channel': 'channel',
+    'logs_channel': 'channel',
+    'nsfw_logs_channel': 'channel',
+    'automod_logs_channel': 'channel',
+    'traffic_logs_channel': 'channel',
+    'message_logs_channel': 'channel',
+    'welcome_channel': 'channel',
+    'verify_logs_channel': 'channel',
+    'action_logs_channel': 'channel',
+    'user_logs_channel': 'channel',
+    'management_logs_channel': 'channel',
+    'verified_role': 'role',
+    'unverified_role': 'role',
+    'mute_role': 'role',
+    'filters': 'list',
+    'rf_blacklist': 'list',
+    'roles': 'perms',
+    'xp_gain': 'xp_gain',
+    'trusted_roles': 'trusted',
+}
+
 class ServerConfigResource(MethodView):
     """ Server Config Resource """
     async def get(self, guild_id: str):
