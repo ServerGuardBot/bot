@@ -171,10 +171,10 @@ class Module:
             return role
     
     async def user_can_manage_server(self, member: Member):
-        return await member.guild_permissions.update_server
+        return member.guild_permissions.update_server
     
     async def user_can_manage_xp(self, member: Member):
-        return await member.guild_permissions.manage_server_xp
+        return member.guild_permissions.manage_server_xp
 
     async def get_user_premium_status(self, user_id):
         from project import bot_config
