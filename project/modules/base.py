@@ -106,29 +106,11 @@ class Module:
             guild_data_cache.set(guild_id, cached)
             return cached
 
-    async def get_guild_info(self, guild_id: str):
-        cached = guild_info_cache.get(guild_id)
-
-        if cached:
-            if cached == 'PRIVATE':
-                return None
-            return cached
-        else:
-            try:
-                cached = await self.bot.fetch_public_server(guild_id)
-                guild_info_cache.set(guild_id, cached)
-                return cached
-            except:
-                # The guild is likely private, indicate as such and return none
-                guild_info_cache.set(guild_id, 'PRIVATE')
-                return None
-
     async def get_ctx_members(self, ctx: commands.Context):
         return await ctx.server.members
 
     async def get_ctx_roles(self, ctx: commands.Context):
-        guild_id = ctx.server.id
-        guild = await self.get_guild_info(guild_id)
+        guild = ctx.server
 
         if guild is not None:
             return guild.roles
@@ -181,42 +163,18 @@ class Module:
             role_int = int(role)
         except Exception:
             pass
-        role_list = await self.get_ctx_roles(ctx)
-        for item in role_list:
+        roles = await self.get_ctx_roles(ctx)
+        for item in roles:
             if item.id == role_int or item.name == role:
                 return item
         if role_int:
             return role
     
     async def user_can_manage_server(self, member: Member):
-        guild_id = member.guild.id
-        guild = await self.get_guild_info(guild_id)
-
-        if guild is None:
-            return False
-
-        roles = guild.roles
-        user_role_ids: list = await member.fetch_role_ids()
-        for role in roles:
-            if role.id in user_role_ids:
-                if role.permissions.manage_server:
-                    return True
-        return False
+        return await member.guild_permissions.update_server
     
     async def user_can_manage_xp(self, member: Member):
-        guild_id = member.guild.id
-        guild = await self.get_guild_info(guild_id)
-
-        if guild is None:
-            return False
-
-        roles = guild.roles
-        user_role_ids: list = await member.fetch_role_ids()
-        for role in roles:
-            if role.id in user_role_ids:
-                if role.permissions.manage_server_xp:
-                    return True
-        return False
+        return await member.guild_permissions.manage_server_xp
 
     async def get_user_premium_status(self, user_id):
         from project import bot_config
