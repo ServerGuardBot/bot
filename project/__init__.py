@@ -42,6 +42,7 @@ import ssl
 import requests
 import csv
 import aiohttp
+import threading
 
 ssl_context = ssl.create_default_context()
 # Sets up old and insecure TLSv1.
