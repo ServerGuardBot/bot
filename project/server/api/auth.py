@@ -1,3 +1,4 @@
+from copy import deepcopy
 from csv import reader
 import os
 import random
@@ -368,8 +369,25 @@ class ServerConfigResource(MethodView):
                         handler = config_handlers.get(key)
                         if handler is not None:
                             try:
+                                orig = deepcopy(guild_data.config[key])
                                 guild_data.config[key] = await handler(guild_data, post_data.get(key))
                                 newValues[key] = guild_data.config.get(key)
+
+                                cfg_type = config_types.get(key, 'string')
+                                translation_keys = {
+                                    'value': post_data.get(key)
+                                }
+                                if cfg_type == 'bool':
+                                    translation_keys['value'] = translation_keys['value'] == 1
+                                elif cfg_type == 'list':
+                                    translation_keys['value'] = ', '.join(translation_keys['value'])
+                                elif cfg_type == 'perms':
+                                    # TODO: Make this compare orig and current value to determine which perm changed
+                                    pass
+                                log_guild_activity(guild_id, auth, {
+                                    'action': key,
+                                    'translation_keys': translation_keys,
+                                })
                             except Exception as e:
                                 failures[key] = str(e)
                     
