@@ -220,12 +220,19 @@ async def alternate_status():
     if payload is not None:
         await client.http.request(Route('PUT', '/users/@me/status'), json=payload)
 
+def post_thread(*args, **kwargs):
+    def run():
+        requests.post(*args, **kwargs)
+    thread = threading.Thread(target=run)
+    thread.daemon = True
+    thread.start()
+
 async def run_hourly_loop():
     while True:
-        requests.post('http://localhost:5000/analytics/servers', headers={
+        post_thread('http://localhost:5000/analytics/servers', headers={
             'authorization': bot_config.SECRET_KEY
         })
-        requests.post('http://localhost:5000/analytics/users', headers={
+        post_thread('http://localhost:5000/analytics/users', headers={
             'authorization': bot_config.SECRET_KEY
         })
         try:
@@ -250,10 +257,10 @@ async def run_bot_loop():
     global server_count
     while True:
         await asyncio.sleep(60)
-        requests.post('http://localhost:5000/moderation/expirestatuses', headers={
+        post_thread('http://localhost:5000/moderation/expirestatuses', headers={
             'authorization': bot_config.SECRET_KEY
         })
-        requests.post('http://localhost:5000/giveaways/check', headers={
+        post_thread('http://localhost:5000/giveaways/check', headers={
             'authorization': bot_config.SECRET_KEY
         })
         try:
@@ -268,14 +275,14 @@ async def run_bot_loop():
 
 async def run_feed_loop():
     while True:
-        requests.post('http://localhost:5000/feeds/check', headers={
+        post_thread('http://localhost:5000/feeds/check', headers={
             'authorization': bot_config.SECRET_KEY
         })
         await asyncio.sleep(60 * 30)
 
 async def run_cleanup_loop():
     while True:
-        requests.post('http://localhost:5000/db/cleanup', headers={
+        post_thread('http://localhost:5000/db/cleanup', headers={
             'authorization': bot_config.SECRET_KEY
         })
         # Try to remove bot from unconfigured servers that are older than 1 week
