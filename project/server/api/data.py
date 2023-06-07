@@ -239,9 +239,9 @@ class UserAnalyticsResource(MethodView):
             return 'Forbidden.', 403
         
         dt = AnalyticsItem.get_date(round_to='hour')
-        value = db.session.query(func.sum(Guild.members)) \
-            .filter(Guild.active == True) \
-            .scalar()
+        value = db.session.query(GuildUser.user_id) \
+            .distinct() \
+            .count()
         value2 = db.session.query(UserInfo.user_id) \
             .filter(UserInfo.premium > 0) \
             .count()
