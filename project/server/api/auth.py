@@ -370,12 +370,13 @@ class ServerConfigResource(MethodView):
                         if handler is not None:
                             try:
                                 orig = deepcopy(guild_data.config[key])
-                                guild_data.config[key] = await handler(guild_data, post_data.get(key))
+                                value = await handler(guild_data, post_data.get(key))
+                                guild_data.config[key] = value
                                 newValues[key] = guild_data.config.get(key)
 
                                 cfg_type = config_types.get(key, 'string')
                                 translation_keys = {
-                                    'value': post_data.get(key)
+                                    'value': value
                                 }
                                 if cfg_type == 'bool':
                                     translation_keys['value'] = translation_keys['value'] == 1
