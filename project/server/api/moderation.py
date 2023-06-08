@@ -328,7 +328,7 @@ class ExpiredStatuses(MethodView):
                                 colour = Colour.blue(),
                                 timestamp = datetime.now()
                             )
-                            em.add_field(name='User', value=user['name'])
+                            em.add_field(name='User', value=f'<@{status.user_id}>')
                             em.add_field(name='Ban Reason', value=status.value['reason'])
                             await bot_api.create_channel_message(logs_channel, payload={
                                 'embeds': [em.to_dict()]
@@ -348,7 +348,7 @@ class ExpiredStatuses(MethodView):
                                 colour = Colour.blue(),
                                 timestamp = datetime.now()
                             )
-                            em.add_field(name='User', value=user['name'])
+                            em.add_field(name='User', value=f'<@{status.user_id}>')
                             em.add_field(name='Mute Reason', value=status.value['reason'])
                             await bot_api.create_channel_message(logs_channel, payload={
                                 'embeds': [em.to_dict()]
@@ -363,7 +363,7 @@ class ExpiredStatuses(MethodView):
                                 colour = Colour.blue(),
                                 timestamp = datetime.now()
                             )
-                            em.add_field(name='User', value=user['name'])
+                            em.add_field(name='User', value=f'<@{status.user_id}>')
                             em.add_field(name='Warning Reason', value=status.value['reason'])
                             await bot_api.create_channel_message(logs_channel, payload={
                                 'embeds': [em.to_dict()]

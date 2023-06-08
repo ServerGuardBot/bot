@@ -156,15 +156,16 @@ class ModerationModule(Module):
                     title = await translate(curLang, 'command.ban.title'),
                     colour = Colour.orange()
                 )
-                em.add_field(name=await translate(curLang, 'log.user'), value=user.name)
-                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.name)
+                em.set_thumbnail(url=user.display_avatar.aws_url)
+                em.add_field(name=await translate(curLang, 'log.user'), value=user.mention)
+                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.mention)
                 if timespan is not None:
                     em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
                 em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
-                await ctx.reply(embed=em)
+                await ctx.reply(embed=em, silent=True)
                 if logs_channel:
                     channel = await ctx.server.fetch_channel(logs_channel)
-                    await channel.send(embed=em)
+                    await channel.send(embed=em, silent=True)
         
         ban.cog = cog
         
@@ -243,15 +244,16 @@ class ModerationModule(Module):
                         title = await translate(curLang, 'command.mute.title'),
                         colour = Colour.orange()
                     )
-                    em.add_field(name=await translate(curLang, 'log.user'), value=user.name)
-                    em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.name)
+                    em.set_thumbnail(url=user.display_avatar.aws_url)
+                    em.add_field(name=await translate(curLang, 'log.user'), value=user.mention)
+                    em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.mention)
                     if timespan is not None:
                         em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
                     em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
-                    await ctx.reply(embed=em)
+                    await ctx.reply(embed=em, silent=True)
                     if logs_channel:
                         channel = await ctx.server.fetch_channel(logs_channel)
-                        await channel.send(embed=em)
+                        await channel.send(embed=em, silent=True)
         
         mute.cog = cog
         
@@ -356,15 +358,16 @@ class ModerationModule(Module):
                     title = await translate(curLang, 'command.warn.title'),
                     colour = Colour.orange()
                 )
-                em.add_field(name=await translate(curLang, 'log.user'), value=user.name)
-                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.name)
+                em.set_thumbnail(url=user.display_avatar.aws_url)
+                em.add_field(name=await translate(curLang, 'log.user'), value=user.mention)
+                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.mention)
                 if timespan is not None:
                     em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
                 em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
-                await ctx.reply(embed=em)
+                await ctx.reply(embed=em, silent=True)
                 if logs_channel:
                     channel = await ctx.server.fetch_channel(logs_channel)
-                    await channel.send(embed=em)
+                    await channel.send(embed=em, silent=True)
         
         warn.cog = cog
         
@@ -858,7 +861,7 @@ class ModerationModule(Module):
                     colour=Colour.gilded(),
                     timestamp=datetime.now()
                 )
-                em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                em.add_field(name='User', value=member.mention)
                 em.add_field(name='ID', value=member.id)
                 if event.before is not None:
                     em.add_field(name='Before', value=event.before.content, inline=False)
@@ -887,7 +890,7 @@ class ModerationModule(Module):
                     colour=event.private and Colour.purple() or Colour.red(),
                     timestamp=event.deleted_at
                 )
-                em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                em.add_field(name='User', value=member.mention)
                 em.add_field(name='ID', value=member.id)
                 em.add_field(name='Deleted message contents', value=event.message.content, inline=False)
                 em.set_thumbnail(url=member.avatar.aws_url)
@@ -959,11 +962,11 @@ class ModerationModule(Module):
                     colour=Colour.gilded(),
                     timestamp=datetime.now()
                 )
-                em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                em.add_field(name='User', value=member.mention)
                 em.add_field(name='ID', value=member.id)
                 em.add_field(name='Edited topic title', value=event.topic.title, inline=False)
                 em.add_field(name='Edited topic contents', value=event.topic.content, inline=False)
-                em.set_thumbnail(url=member.avatar.aws_url)
+                em.set_thumbnail(url=member.display_avatar.aws_url)
                 await channel.send(embed=em)
         bot.topic_update_listeners.append(on_forum_topic_update)
 
@@ -983,11 +986,11 @@ class ModerationModule(Module):
                         colour=Colour.red(),
                         timestamp=datetime.now()
                     )
-                    em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                    em.add_field(name='User', value=member.mention)
                     em.add_field(name='ID', value=member.id)
                     em.add_field(name='Deleted topic title', value=event.topic.title, inline=False)
                     em.add_field(name='Deleted topic contents', value=event.topic.content, inline=False)
-                    em.set_thumbnail(url=member.avatar.aws_url)
+                    em.set_thumbnail(url=member.display_avatar.aws_url)
                     await channel.send(embed=em)
         bot.topic_delete_listeners.append(on_forum_topic_delete)
 
@@ -1021,11 +1024,11 @@ class ModerationModule(Module):
                     colour=Colour.gilded(),
                     timestamp=datetime.now()
                 )
-                em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                em.add_field(name='User', value=member.mention)
                 em.add_field(name='ID', value=member.id)
                 em.add_field(name='Topic title', value=event.topic.title, inline=False)
                 em.add_field(name='Edited reply contents', value=event.reply.content, inline=False)
-                em.set_thumbnail(url=member.avatar.aws_url)
+                em.set_thumbnail(url=member.display_avatar.aws_url)
                 await channel.send(embed=em)
         bot.topic_reply_update_listeners.append(on_forum_topic_reply_update)
 
@@ -1045,10 +1048,11 @@ class ModerationModule(Module):
                         colour=Colour.red(),
                         timestamp=datetime.now()
                     )
-                    em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                    em.add_field(name='User', value=member.mention)
                     em.add_field(name='ID', value=member.id)
                     em.add_field(name='Topic title', value=event.topic.title, inline=False)
                     em.add_field(name='Deleted reply contents', value=event.reply.content, inline=False)
+                    em.set_thumbnail(url=member.display_avatar.aws_url)
                     await channel.send(embed=em)
         bot.topic_reply_delete_listeners.append(on_forum_topic_reply_delete)
 
@@ -1079,11 +1083,11 @@ class ModerationModule(Module):
                     colour=Colour.gilded(),
                     timestamp=datetime.now()
                 )
-                em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                em.add_field(name='User', value=member.mention)
                 em.add_field(name='ID', value=member.id)
                 em.add_field(name='Announcement title', value=event.announcement.title, inline=False)
                 em.add_field(name='Edited reply contents', value=event.reply.content, inline=False)
-                em.set_thumbnail(url=member.avatar.aws_url)
+                em.set_thumbnail(url=member.display_avatar.aws_url)
                 await channel.send(embed=em)
         bot.announcement_reply_update_listeners.append(on_announcement_reply_update)
         
@@ -1103,7 +1107,8 @@ class ModerationModule(Module):
                         colour=Colour.red(),
                         timestamp=datetime.now()
                     )
-                    em.add_field(name='User', value=f'[{member.name}]({member.profile_url})')
+                    em.add_field(name='User', value=member.mention)
+                    em.set_thumbnail(url=member.display_avatar.aws_url)
                     await channel.send(embed=em)
         bot.announcement_reply_delete_listeners.append(on_announcement_reply_delete)
 
