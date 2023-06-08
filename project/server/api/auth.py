@@ -465,7 +465,7 @@ def get_user(user_id: str):
         }
 
 class ServerActivityResource(MethodView):
-    async def get(self, guild_id: str, start_index: int):
+    async def get(self, guild_id: str, start_index: int=0):
         auth = get_user_auth()
 
         guild_user: GuildUser = GuildUser.query \
