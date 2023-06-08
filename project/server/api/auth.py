@@ -394,14 +394,9 @@ class ServerConfigResource(MethodView):
                                     changes = {}
                                     for k, v in curr.items():
                                         if v != old[k]:
-                                            changes[k] = v
-                                    new_value = {}
-                                    for k, v in changes.items():
-                                        new_value[k] = {
-                                            'before': old[k],
-                                            'after': v
-                                        }
-                                    translation_keys['value'] = new_value
+                                            translation_keys['value'] = v
+                                            translation_keys['role'] = k
+                                            break
                                 elif cfg_type == 'trusted':
                                     orig: list
                                     changes = {
@@ -411,24 +406,27 @@ class ServerConfigResource(MethodView):
                                     for item in orig:
                                         item: int
                                         if not item in translation_keys['value']:
-                                            changes['removed'].append(item)
+                                            translation_keys['value'] = 'false'
+                                            translation_keys['role'] = item
+                                            break
                                     for item in translation_keys['value']:
                                         item: int
                                         if not item in orig:
-                                            changes['added'].append(item)
+                                            translation_keys['value'] = 'true'
+                                            translation_keys['role'] = item
+                                            break
                                 elif cfg_type == 'xp_gain':
                                     orig: dict
                                     changes = {}
                                     for k, v in translation_keys['value'].items():
                                         if v != orig[k]:
-                                            changes[k] = {
-                                                'before': orig[k],
-                                                'after': v
-                                            }
+                                            translation_keys['value'] = v
+                                            translation_keys['role'] = k
                                     translation_keys['value'] = changes
                                 log_guild_activity(guild_id, auth, {
                                     'action': key,
                                     'translation_keys': translation_keys,
+                                    'action_type': cfg_type,
                                 })
                             except Exception as e:
                                 failures[key] = str(e)
