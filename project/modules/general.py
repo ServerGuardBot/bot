@@ -17,6 +17,7 @@ import requests
 import itertools
 
 LOGIN_CHANNEL_ID = '1f6fae7f-6cdf-403d-80b9-623a76f8b621'
+TEST_LOGIN_CHANNEL_ID = 'aa853405-37f8-4d8a-a4f8-3196b7a4a379'
 SUPPORT_SERVER_ID = 'aE9Zg6Kj'
 
 member = commands.MemberConverter()
@@ -1449,7 +1450,7 @@ class GeneralModule(Module):
                 requests.put(f'http://localhost:5000/data/cache/{message.guild.id}/channels', headers={
                     'authorization': bot_config.SECRET_KEY
                 }, json=channel_payload)
-            if message.server_id == SUPPORT_SERVER_ID and not message.channel_id == LOGIN_CHANNEL_ID:
+            if message.server_id == SUPPORT_SERVER_ID and not (message.channel_id == LOGIN_CHANNEL_ID or message.channel_id == TEST_LOGIN_CHANNEL_ID):
                 content = message.content.lower().strip()
                 for item in automated_responses:
                     triggered = True
@@ -1468,7 +1469,7 @@ class GeneralModule(Module):
                                 break
                     if triggered:
                         await message.reply(embed=item['response'])
-            if message.channel_id == LOGIN_CHANNEL_ID:
+            if message.channel_id == LOGIN_CHANNEL_ID or message.channel_id == TEST_LOGIN_CHANNEL_ID:
                 # Do login stuff
                 await message.delete() # Delete it first so there is minimal time-frame for others to see the code
                 status_result = requests.get(f'http://localhost:5000/auth/status/{message.content}', headers={
