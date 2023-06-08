@@ -393,7 +393,7 @@ class ServerConfigResource(MethodView):
                                         curr[item['id']] = item['level']
                                     changes = {}
                                     for k, v in curr.items():
-                                        if v != old[k]:
+                                        if v != old.get(k):
                                             translation_keys['value'] = v
                                             translation_keys['role'] = k
                                             break
@@ -419,7 +419,7 @@ class ServerConfigResource(MethodView):
                                     orig: dict
                                     changes = {}
                                     for k, v in translation_keys['value'].items():
-                                        if v != orig[k]:
+                                        if v != orig.get(k):
                                             translation_keys['value'] = v
                                             translation_keys['role'] = k
                                     translation_keys['value'] = changes
