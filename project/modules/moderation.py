@@ -656,6 +656,7 @@ class ModerationModule(Module):
                             title='Permissions Error',
                             description='Server Guard encountered a permissions error while trying to delete the messages.'
                         ), private=True)
+                    message.automoderated = True
                     return True
 
             if config.get('url_filter', 0) == 1:
@@ -709,6 +710,7 @@ class ModerationModule(Module):
                             colour = Colour.red(),
                         ).add_field(name='Invite Link', value='https://www.' + domain + '/' + invite, inline=False)\
                         .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
+                    message.automoderated = True
                     return True
             
             if config.get('toxicity', 0) > 0:
@@ -753,6 +755,7 @@ class ModerationModule(Module):
                         colour = Colour.orange(),
                     ).set_footer(text=f'Certainty: {round(max(toxicity_proba, hatespeech_proba))}%').add_field(name='User', value=message.author.name))
             if hit_filter:
+                message.automoderated = True
                 return True
             if custom_filter is not None and len(custom_filter) > 0:
                 filter = self.get_filter(message.server_id)
@@ -789,6 +792,7 @@ class ModerationModule(Module):
                                     title='Permissions Error',
                                     description='Server Guard encountered a permissions error while trying to delete the messages.'
                                 ), private=True)
+                            message.automoderated = True
                             return True
                         try:
                             head_req = requests.head(link, headers={
@@ -836,6 +840,7 @@ class ModerationModule(Module):
                                             title='Permissions Error',
                                             description='Server Guard encountered a permissions error while trying to delete the messages.'
                                         ), private=True)
+                                    message.automoderated = True
                                     return True
                         except:
                             pass
@@ -845,6 +850,7 @@ class ModerationModule(Module):
             if event.after.author.bot:
                 return
             member = await event.server.getch_member(event.after.author.id)
+            event.after.automoderated = False
             if (await self.is_moderator(member)) == False and (await self.user_can_manage_server(member)) == False:
                 if await handle_text_message(event.after):
                     return
@@ -876,6 +882,9 @@ class ModerationModule(Module):
                 return
             if event.message.author.bot or event.channel_id == LOGIN_CHANNEL_ID:
                 return
+            if event.message.automoderated:
+                # This message was handled by automod and deleted, don't log it as it should already be logged in the automod logs
+                return
             guild_data: dict = self.get_guild_data(event.server_id)
             message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
 
@@ -902,6 +911,7 @@ class ModerationModule(Module):
             if message.author.bot:
                 return
             member = await message.guild.getch_member(message.author.id)
+            message.automoderated = False
             if (await self.is_moderator(member)) or await self.user_can_manage_server(member):
                 return
             if await handle_text_message(message):
