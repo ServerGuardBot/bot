@@ -391,7 +391,6 @@ class ServerConfigResource(MethodView):
                                     for item in translation_keys['value']:
                                         item: dict
                                         curr[item['id']] = item['level']
-                                    changes = {}
                                     for k, v in curr.items():
                                         if v != old.get(k):
                                             translation_keys['value'] = v
@@ -399,30 +398,27 @@ class ServerConfigResource(MethodView):
                                             break
                                 elif cfg_type == 'trusted':
                                     orig: list
-                                    changes = {
-                                        'added': [],
-                                        'removed': [],
-                                    }
+                                    finished = False
                                     for item in orig:
                                         item: int
                                         if not item in translation_keys['value']:
                                             translation_keys['value'] = 'false'
                                             translation_keys['role'] = item
+                                            finished = True
                                             break
-                                    for item in translation_keys['value']:
-                                        item: int
-                                        if not item in orig:
-                                            translation_keys['value'] = 'true'
-                                            translation_keys['role'] = item
-                                            break
+                                    if not finished:
+                                        for item in translation_keys['value']:
+                                            item: int
+                                            if not item in orig:
+                                                translation_keys['value'] = 'true'
+                                                translation_keys['role'] = item
+                                                break
                                 elif cfg_type == 'xp_gain':
                                     orig: dict
-                                    changes = {}
                                     for k, v in translation_keys['value'].items():
                                         if v != orig.get(k):
                                             translation_keys['value'] = v
                                             translation_keys['role'] = k
-                                    translation_keys['value'] = changes
                                 log_guild_activity(guild_id, auth, {
                                     'action': key,
                                     'translation_keys': translation_keys,
