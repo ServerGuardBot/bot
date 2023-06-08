@@ -382,8 +382,49 @@ class ServerConfigResource(MethodView):
                                 elif cfg_type == 'list':
                                     translation_keys['value'] = ', '.join(translation_keys['value'])
                                 elif cfg_type == 'perms':
-                                    # TODO: Make this compare orig and current value to determine which perm changed
-                                    pass
+                                    orig: list
+                                    old, curr = {}, {}
+                                    for item in orig:
+                                        item: dict
+                                        old[item['id']] = item['level']
+                                    for item in translation_keys['value']:
+                                        item: dict
+                                        curr[item['id']] = item['level']
+                                    changes = {}
+                                    for k, v in curr.items():
+                                        if v != old[k]:
+                                            changes[k] = v
+                                    new_value = {}
+                                    for k, v in changes.items():
+                                        new_value[k] = {
+                                            'before': old[k],
+                                            'after': v
+                                        }
+                                    translation_keys['value'] = new_value
+                                elif cfg_type == 'trusted':
+                                    orig: list
+                                    changes = {
+                                        'added': [],
+                                        'removed': [],
+                                    }
+                                    for item in orig:
+                                        item: int
+                                        if not item in translation_keys['value']:
+                                            changes['removed'].append(item)
+                                    for item in translation_keys['value']:
+                                        item: int
+                                        if not item in orig:
+                                            changes['added'].append(item)
+                                elif cfg_type == 'xp_gain':
+                                    orig: dict
+                                    changes = {}
+                                    for k, v in translation_keys['value'].items():
+                                        if v != orig[k]:
+                                            changes[k] = {
+                                                'before': orig[k],
+                                                'after': v
+                                            }
+                                    translation_keys['value'] = changes
                                 log_guild_activity(guild_id, auth, {
                                     'action': key,
                                     'translation_keys': translation_keys,
