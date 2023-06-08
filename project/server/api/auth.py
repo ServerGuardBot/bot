@@ -247,6 +247,7 @@ def premium_config(level, handler):
 
 config_handlers = {
     'verification_channel': handle_channel_config,
+    'giveaway_channel': handle_channel_config,
     'log_commands': handle_bool_config,
     'silence_commands': handle_bool_config,
     'logs_channel': handle_channel_config,
@@ -262,6 +263,7 @@ config_handlers = {
     'log_role_changes': handle_bool_config,
     'verified_role': handle_role_config,
     'unverified_role': handle_role_config,
+    'giveaway_ping': handle_role_config,
     'mute_role': handle_role_config,
     'toxicity': handle_threshold_config,
     'hatespeech': handle_threshold_config,
@@ -312,6 +314,8 @@ config_types = {
     'action_logs_channel': 'channel',
     'user_logs_channel': 'channel',
     'management_logs_channel': 'channel',
+    'giveaway_channel': 'channel',
+    'giveaway_ping': 'role',
     'verified_role': 'role',
     'unverified_role': 'role',
     'mute_role': 'role',
