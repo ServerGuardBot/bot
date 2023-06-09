@@ -34,6 +34,11 @@ class ProxyServerImage(MethodView):
 
                 url = server_data.get(resource, DEFAULT_RESOURCES[resource])
 
+                if request.args.get('blur', 'false').lower() == 'true':
+                    if resource == 'banner':
+                        url = url.replace('-Hero.png', '-SmallBlurred.jpg')
+                        # Only banners to my knowledge have blurred versions so ignore other resources
+
                 response = requests.get(url, headers={
                 'User-Agent': 'Guilded Server Guard/1.0 (Image Proxy)'
                 }, stream=True)
@@ -58,6 +63,11 @@ class ProxyUserImage(MethodView):
                 user_data: dict = user_data['user']
 
                 url = user_data.get(USER_RESOURCE_MAP.get(resource, resource), DEFAULT_RESOURCES[resource])
+
+                if request.args.get('blur', 'false').lower() == 'true':
+                    if resource == 'banner':
+                        url = url.replace('-Hero.png', '-SmallBlurred.jpg')
+                        # Only banners to my knowledge have blurred versions so ignore other resources
 
                 response = requests.get(url, headers={
                 'User-Agent': 'Guilded Server Guard/1.0 (Image Proxy)'
