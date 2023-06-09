@@ -402,7 +402,7 @@ class ServerConfigResource(MethodView):
                                             translation_keys['value'] = v
                                             translation_keys['role'] = k
                                             break
-                                    if translation_keys['role'] == None:
+                                    if translation_keys.get('role') == None:
                                         cancel_log = True
                                 elif cfg_type == 'trusted':
                                     orig: list
@@ -421,7 +421,7 @@ class ServerConfigResource(MethodView):
                                                 translation_keys['value'] = 'true'
                                                 translation_keys['role'] = item
                                                 break
-                                    if translation_keys['role'] == None:
+                                    if translation_keys.get('role') == None:
                                         cancel_log = True
                                 elif cfg_type == 'xp_gain':
                                     orig: dict
@@ -429,7 +429,7 @@ class ServerConfigResource(MethodView):
                                         if v != orig.get(k):
                                             translation_keys['value'] = v
                                             translation_keys['role'] = k
-                                    if translation_keys['role'] == None:
+                                    if translation_keys.get('role') == None:
                                         cancel_log = True
                                 if not cancel_log:
                                     log_guild_activity(guild_id, auth, {
