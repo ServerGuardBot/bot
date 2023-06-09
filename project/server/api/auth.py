@@ -383,6 +383,7 @@ class ServerConfigResource(MethodView):
                                 translation_keys = {
                                     'value': value
                                 }
+                                cancel_log = False
                                 if cfg_type == 'bool':
                                     translation_keys['value'] = translation_keys['value'] == 1
                                 elif cfg_type == 'list':
@@ -401,6 +402,8 @@ class ServerConfigResource(MethodView):
                                             translation_keys['value'] = v
                                             translation_keys['role'] = k
                                             break
+                                    if translation_keys['role'] == None:
+                                        cancel_log = True
                                 elif cfg_type == 'trusted':
                                     orig: list
                                     finished = False
@@ -418,17 +421,22 @@ class ServerConfigResource(MethodView):
                                                 translation_keys['value'] = 'true'
                                                 translation_keys['role'] = item
                                                 break
+                                    if translation_keys['role'] == None:
+                                        cancel_log = True
                                 elif cfg_type == 'xp_gain':
                                     orig: dict
                                     for k, v in translation_keys['value'].items():
                                         if v != orig.get(k):
                                             translation_keys['value'] = v
                                             translation_keys['role'] = k
-                                log_guild_activity(guild_id, auth, {
-                                    'action': key,
-                                    'translation_keys': translation_keys,
-                                    'action_type': cfg_type,
-                                })
+                                    if translation_keys['role'] == None:
+                                        cancel_log = True
+                                if not cancel_log:
+                                    log_guild_activity(guild_id, auth, {
+                                        'action': key,
+                                        'translation_keys': translation_keys,
+                                        'action_type': cfg_type,
+                                    })
                             except Exception as e:
                                 failures[key] = str(e)
                     
