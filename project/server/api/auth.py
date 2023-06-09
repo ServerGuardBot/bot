@@ -5,6 +5,7 @@ import random
 import re
 import string
 import uuid
+import requests
 import project.helpers.token as token
 import geoip2.database as geoip
 
@@ -17,7 +18,7 @@ from flask.views import MethodView
 from project import app, db, get_shared_state, BotAPI
 from project.helpers.Cache import Cache
 from project.helpers.images import *
-from guilded import http
+from guilded import Colour, http
 
 from project.server.models import GuildUser, UserInfo, Guild, BlacklistedRefreshToken, GuildActivity
 
@@ -502,6 +503,7 @@ class LoginResource(MethodView):
             .filter(UserInfo.user_id == auth) \
             .first()
         
+        # TODO: Remove reliance on User API for getting user guilds
         guilds = []
 
         for guild in JSONDecoder().decode(user_info.guilds):
@@ -521,6 +523,40 @@ class LoginResource(MethodView):
                     if guild_owner_user is not None:
                         guild['premium'] = int(guild_owner_user.premium)
                 guilds.append(guild)
+        
+        with BotAPI() as bot_api:
+            for guild in guilds:
+                try:
+                    roles = await bot_api.get_roles(guild['id'])
+                    role_payload = []
+                    for role in roles['roles']:
+                        role: dict
+
+                        colours = []
+                        if role.get('colors'):
+                            for colour in role['colors']:
+                                colours.append(str(Colour(colour)))
+                        else:
+                            colours.append(str(Colour.default()))
+
+                        payload = {
+                            'id': role['id'],
+                            'name': role['name'],
+                            'position': role['position'],
+                            'base': role.get('isBase', False),
+                            'colour': colours[0],
+                            'colours': colours,
+                            'icon': role.get('icon', ''),
+                            'permissions': role['permissions']
+                        }
+                        role_payload.append(payload)
+
+                    requests.put(f'http://localhost:5000/data/cache/{guild["id"]}/roles', headers={
+                        'authorization': app.config.get('SECRET_KEY')
+                    }, json=role_payload)
+                except Exception as e:
+                    print(f'Error updating role cache for guild {guild["id"]}: {e}')
+                    
 
         return jsonify({
             'id': auth,

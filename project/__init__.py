@@ -5,7 +5,8 @@ from guilded import MessageEvent, MessageUpdateEvent, MessageDeleteEvent, Messag
     MemberRemoveEvent, BanCreateEvent, BanDeleteEvent, BulkMemberRolesUpdateEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, \
     ForumTopicUpdateEvent, ServerChannelCreateEvent, ServerChannelDeleteEvent, ServerChannelUpdateEvent, ForumTopicLockEvent, \
     ForumTopicUnlockEvent, ForumTopicPinEvent, ForumTopicUnpinEvent, ForumTopicReplyCreateEvent, ForumTopicReplyDeleteEvent, \
-    ForumTopicReplyUpdateEvent, AnnouncementReplyCreateEvent, AnnouncementReplyUpdateEvent, AnnouncementReplyDeleteEvent, http
+    ForumTopicReplyUpdateEvent, AnnouncementReplyCreateEvent, AnnouncementReplyUpdateEvent, AnnouncementReplyDeleteEvent, \
+    RoleCreateEvent, RoleDeleteEvent, RoleUpdateEvent, http
 from guilded.ext import commands
 from guilded.http import Route
 from nsfw_detector import predict as nsfw_detect
@@ -161,6 +162,9 @@ class BotClient(commands.Bot):
     announcement_reply_create_listeners: list = []
     announcement_reply_update_listeners: list = []
     announcement_reply_delete_listeners: list = []
+    role_create_listeners: list = []
+    role_update_listeners: list = []
+    role_delete_listeners: list = []
 
 client = BotClient('/', experimental_event_style=True)
 
@@ -556,6 +560,30 @@ async def on_server_channel_delete(event: ServerChannelDeleteEvent):
             await callback(event)
         except Exception as e:
             print('Failed to run channel delete listener:', e)
+
+@client.event
+async def on_role_create(event: RoleCreateEvent):
+    for callback in client.role_create_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run role create listener:', e)
+
+@client.event
+async def on_role_update(event: RoleUpdateEvent):
+    for callback in client.role_update_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run role update listener:', e)
+
+@client.event
+async def on_role_delete(event: RoleDeleteEvent):
+    for callback in client.role_delete_listeners:
+        try:
+            await callback(event)
+        except Exception as e:
+            print('Failed to run role delete listener:', e)
 
 if not os.getenv('MIGRATING_DB', '0') == '1':
     print('Registering Modules')

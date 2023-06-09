@@ -6,7 +6,7 @@ from project import bot_config
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
 from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote, \
-    ServerChannelCreateEvent, ServerChannelDeleteEvent, MemberRemoveEvent
+    ServerChannelCreateEvent, ServerChannelDeleteEvent, RoleCreateEvent, RoleDeleteEvent, RoleUpdateEvent, MemberRemoveEvent
 from datetime import datetime
 from humanfriendly import format_timespan
 from project.helpers.translator import getLanguages, translate
@@ -1639,6 +1639,49 @@ class GeneralModule(Module):
                     print(f'Failed to send leave message in {server.name} ({server.id}) for user {user.name} ({user.id}): {str(e)}')
         bot.leave_listeners.append(on_member_removed)
 
+        async def on_role_create(event: RoleCreateEvent):
+            role = event.role
+            role_payload = [{
+                'id': role.id,
+                'name': role.name,
+                'position': role.position,
+                'base': role.base,
+                'colour': str(role.colour),
+                'colours': [str(colour) for colour in role.colours],
+                'icon': role.icon != None and role.icon.aws_url or '',
+                'permissions': role.permissions.values
+            }]
+            requests.put(f'http://localhost:5000/data/cache/{event.server_id}/roles', headers={
+                'authorization': bot_config.SECRET_KEY
+            }, json=role_payload)
+        bot.role_create_listeners.append(on_role_create)
+
+        async def on_role_update(event: RoleUpdateEvent):
+            role = event.after
+            role_payload = [{
+                'id': role.id,
+                'name': role.name,
+                'position': role.position,
+                'base': role.base,
+                'colour': str(role.colour),
+                'colours': [str(colour) for colour in role.colours],
+                'icon': role.icon != None and role.icon.aws_url or '',
+                'permissions': role.permissions.values
+            }]
+            requests.put(f'http://localhost:5000/data/cache/{event.server_id}/roles', headers={
+                'authorization': bot_config.SECRET_KEY
+            }, json=role_payload)
+        bot.role_update_listeners.append(on_role_update)
+
+        async def on_role_delete(event: RoleDeleteEvent):
+            role_payload = [{
+                'id': event.role.id,
+            }]
+            requests.delete(f'http://localhost:5000/data/cache/{event.server_id}/roles', headers={
+                'authorization': bot_config.SECRET_KEY
+            }, json=role_payload)
+        bot.role_delete_listeners.append(on_role_delete)
+
         @bot.event
         async def on_bot_remove(event: BotRemoveEvent):
             requests.patch(f'http://localhost:5000/guilddata/{event.server_id}', json={
@@ -1673,3 +1716,22 @@ class GeneralModule(Module):
                 }, headers={
                 'authorization': bot_config.SECRET_KEY
             })
+
+            role_payload = []
+
+            roles = await event.server.fetch_roles()
+            for role in roles:
+                role_payload.append({
+                    'id': role.id,
+                    'name': role.name,
+                    'position': role.position,
+                    'base': role.base,
+                    'colour': str(role.colour),
+                    'colours': [str(colour) for colour in role.colours],
+                    'icon': role.icon != None and role.icon.aws_url or '',
+                    'permissions': role.permissions.values
+                })
+
+            requests.put(f'http://localhost:5000/data/cache/{event.server_id}/roles', headers={
+                'authorization': bot_config.SECRET_KEY
+            }, json=role_payload)
