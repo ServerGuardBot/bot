@@ -219,6 +219,7 @@ def post_thread(*args, **kwargs):
 
 async def run_hourly_loop():
     while True:
+        print('Running hourly loop')
         post_thread('http://localhost:5000/analytics/servers', headers={
             'authorization': bot_config.SECRET_KEY
         })
@@ -241,12 +242,14 @@ async def run_hourly_loop():
 async def run_url_db_dl():
     while True:
         await asyncio.sleep(60 * 10)
+        print('Running Malicious URL DB Download')
         load_malicious_url_db()
 
 async def run_bot_loop():
     global server_count
     while True:
         await asyncio.sleep(60)
+        print('Running Bot Loop')
         post_thread('http://localhost:5000/moderation/expirestatuses', headers={
             'authorization': bot_config.SECRET_KEY
         })
@@ -265,6 +268,7 @@ async def run_bot_loop():
 
 async def run_feed_loop():
     while True:
+        print('Running Feed Loop')
         post_thread('http://localhost:5000/feeds/check', headers={
             'authorization': bot_config.SECRET_KEY
         })
@@ -272,6 +276,7 @@ async def run_feed_loop():
 
 async def run_cleanup_loop():
     while True:
+        print('Running Cleanup Loop')
         post_thread('http://localhost:5000/db/cleanup', headers={
             'authorization': bot_config.SECRET_KEY
         })
