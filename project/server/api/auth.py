@@ -374,7 +374,7 @@ class ServerConfigResource(MethodView):
                         handler = config_handlers.get(key)
                         if handler is not None:
                             try:
-                                orig = deepcopy(guild_data.config[key])
+                                orig = deepcopy(guild_data.config.get(key))
                                 value = await handler(guild_data, post_data.get(key))
                                 guild_data.config[key] = value
                                 newValues[key] = guild_data.config.get(key)
@@ -391,9 +391,10 @@ class ServerConfigResource(MethodView):
                                 elif cfg_type == 'perms':
                                     orig: list
                                     old, curr = {}, {}
-                                    for item in orig:
-                                        item: dict
-                                        old[item['id']] = item['level']
+                                    if orig is not None:
+                                        for item in orig:
+                                            item: dict
+                                            old[item['id']] = item['level']
                                     for item in translation_keys['value']:
                                         item: dict
                                         curr[item['id']] = item['level']
@@ -407,36 +408,41 @@ class ServerConfigResource(MethodView):
                                 elif cfg_type == 'trusted':
                                     orig: list
                                     finished = False
-                                    for item in orig:
-                                        item: int
-                                        if not item in translation_keys['value']:
-                                            translation_keys['value'] = 'false'
-                                            translation_keys['role'] = item
-                                            finished = True
-                                            break
-                                    if not finished:
-                                        for item in translation_keys['value']:
+                                    if orig is not None:
+                                        for item in orig:
                                             item: int
-                                            if not item in orig:
-                                                translation_keys['value'] = 'true'
+                                            if not item in translation_keys['value']:
+                                                translation_keys['value'] = 'false'
                                                 translation_keys['role'] = item
+                                                finished = True
                                                 break
+                                        if not finished:
+                                            for item in translation_keys['value']:
+                                                item: int
+                                                if not item in orig:
+                                                    translation_keys['value'] = 'true'
+                                                    translation_keys['role'] = item
+                                                    break
                                     if translation_keys.get('role') == None:
                                         cancel_log = True
                                 elif cfg_type == 'xp_gain':
                                     orig: dict
-                                    for k, v in translation_keys['value'].items():
-                                        if v != orig.get(k):
-                                            translation_keys['value'] = v
-                                            translation_keys['role'] = k
+                                    if orig is not None:
+                                        for k, v in translation_keys['value'].items():
+                                            if v != orig.get(k):
+                                                translation_keys['value'] = v
+                                                translation_keys['role'] = k
                                     if translation_keys.get('role') == None:
                                         cancel_log = True
                                 if not cancel_log:
-                                    log_guild_activity(guild_id, auth, {
-                                        'action': key,
-                                        'translation_keys': translation_keys,
-                                        'action_type': cfg_type,
-                                    })
+                                    try:
+                                        log_guild_activity(guild_id, auth, {
+                                            'action': key,
+                                            'translation_keys': translation_keys,
+                                            'action_type': cfg_type,
+                                        })
+                                    except Exception as e:
+                                        print(f'Failed to log activity "{key}": {e}')
                             except Exception as e:
                                 failures[key] = str(e)
                     
