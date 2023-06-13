@@ -354,11 +354,6 @@ class LargestServersResource(MethodView):
 class ServerCountResource(MethodView):
     """ Get the server count of the bot """
     async def get(self):
-        auth = request.headers.get('authorization')
-
-        if auth != app.config.get('SECRET_KEY'):
-            return 'Forbidden.', 403
-
         return jsonify({
             'value': db.session.query(Guild.active) \
                 .filter(Guild.active) \
