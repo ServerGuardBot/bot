@@ -89,7 +89,7 @@ class Module:
                 }, headers={
                 'authorization': bot_config.SECRET_KEY
             })
-        return permission_level - 1
+        return permission_level
 
 
     def get_guild_data(self, guild_id: str):
