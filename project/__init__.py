@@ -284,7 +284,7 @@ async def run_cleanup_loop():
         # NOTE: Maybe send an automated notice to unconfigured servers a day before removing itself?
         for server in client.servers:
             print(f'Checking "{server.id}"')
-            await asyncio.sleep()
+            await asyncio.sleep(0)
             try:
                 guild_data_req = requests.get(f'http://localhost:5000/guilddata/{server.id}', headers={
                     'authorization': bot_config.SECRET_KEY
