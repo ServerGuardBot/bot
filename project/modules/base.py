@@ -170,16 +170,26 @@ class Module:
         if role_int:
             return role
     
+    async def getch_role(self, server_id: str, role_id: int):
+        """ Stupid helper function to get and cache server roles because the library
+        doesn't do this itself """
+        server = await self.bot.getch_server(server_id)
+        role = await server.get_role(role_id)
+        if role is None:
+            role = await server.fetch_role(role_id)
+            server._roles[role_id] = role
+        return role
+    
     async def user_can_manage_server(self, member: Member):
         ids = member._role_ids
         for role_id in ids:
-            role = await member.server.getch_role(role_id)
+            role = await self.getch_role(member.server.id, role_id)
             if role.permissions.update_server: return True
     
     async def user_can_manage_xp(self, member: Member):
         ids = member._role_ids
         for role_id in ids:
-            role = await member.server.getch_role(role_id)
+            role = await self.getch_role(member.server.id, role_id)
             print(f'[{role.name}]: {role.permissions.manage_server_xp}')
             if role.permissions.manage_server_xp: return True
 
