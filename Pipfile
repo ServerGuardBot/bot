@@ -5,7 +5,7 @@ name = "pypi"
 
 [packages]
 python-dotenv = "*"
-"guilded.py" = {git = "https://github.com/shayypy/guilded.py.git"}
+"guilded.py" = "*"
 gunicorn = "*"
 flask = {extras = ["async"], version = "*"}
 flask-sqlalchemy = "*"
@@ -26,7 +26,7 @@ sklearn = "*"
 python-levenshtein = "*"
 better-profanity = "*"
 pycryptodome = "*"
-protobuf = "<=3.20"
+protobuf = "*"
 tensorflow = "*"
 unidecode = "*"
 geoip2 = "*"
@@ -41,4 +41,4 @@ lxml = "*"
 [dev-packages]
 
 [requires]
-python_version = "3.10"
+python_version = "3.11"
