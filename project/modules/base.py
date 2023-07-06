@@ -61,7 +61,7 @@ class Module:
         
         if update_data:
             guild = await self.bot.getch_server(guild_id)
-            user = await guild.getch_member(user_id)
+            user = await guild.fetch_member(user_id)
             if user_id == guild.owner.id:
                 permission_level = 4 # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
             elif await self.user_can_manage_server(user):
@@ -183,6 +183,9 @@ class Module:
     
     async def user_can_manage_server(self, member: Member):
         ids = member._role_ids
+        if not member.server:
+            print(f'Member "{member.id}" has no server. (huh????)')
+            return False
         for role_id in ids:
             role = await self.getch_role(member.server, role_id)
             if role.permissions.update_server: return True
