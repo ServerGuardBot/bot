@@ -1151,7 +1151,7 @@ class ModerationModule(Module):
                                 timestamp=datetime.now(),
                                 url=member_after.profile_url
                             ) \
-                                .set_thumbnail(url=member_after.avatar.aws_url)
+                                .set_thumbnail(url=member_after.display_avatar.aws_url)
                             if len(added) > 0:
                                 em.add_field(name='Added roles', value=', '.join([f'<@{role}>' for role in added]))
                             if len(removed) > 0:
