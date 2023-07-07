@@ -174,7 +174,7 @@ class Module:
         """ Stupid helper function to get and cache server roles because the library
         doesn't do this itself """
         if server:
-            role = await server.get_role(role_id)
+            role = server.get_role(role_id)
             if role is None:
                 role = await server.fetch_role(role_id)
                 server._roles[role_id] = role
