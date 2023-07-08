@@ -1,3 +1,4 @@
+from pydoc import describe
 from project.modules.base import Module
 from project.modules.moderation import reset_filter_cache
 from project.helpers.embeds import *
@@ -8,7 +9,7 @@ from guilded.ext.commands.help import HelpCommand, Paginator
 from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote, \
     ServerChannelCreateEvent, ServerChannelDeleteEvent, RoleCreateEvent, RoleDeleteEvent, RoleUpdateEvent, MemberRemoveEvent
 from datetime import datetime
-from humanfriendly import format_timespan
+from humanfriendly import format_timespan, parse_timespan
 from project.helpers.translator import getLanguages, translate
 
 import os
@@ -1285,6 +1286,83 @@ class GeneralModule(Module):
             else:
                 await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.channel")))
         
+        @bot.group(invoke_without_command=True)
+        async def reminder(_, ctx: commands.Context):
+            """Manage reminders"""
+            pass
+
+        reminder.cog = cog
+        
+        @reminder.command(name='add')
+        async def remindme(ctx: commands.Context, timespan: str, *_reason):
+            """Remind yourself to do something"""
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+            reason = ' '.join(_reason)
+            try:
+                timespan = parse_timespan(timespan)
+            except:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
+                timespan = None
+            if timespan is not None:
+                result = requests.post(f'http://localhost:5000/reminders/{ctx.server.id}/{ctx.author.id}', json={
+                    'channel': ctx.channel.id,
+                    'description': reason,
+                    'ends': timespan is not None and datetime.now().timestamp() + timespan or None
+                }, headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                if result.ok:
+                    em = Embed(
+                        title = await translate(curLang, 'command.reminder.title'),
+                        colour = Colour.blue(),
+                        description = await translate(curLang, 'command.reminder.success')
+                    )
+                    await ctx.reply(embed=em)
+                else:
+                    await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error")))
+        
+        @reminder.command(name='list')
+        async def remindme_list(ctx: commands.Context):
+            """List your reminders"""
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+            result = requests.get(f'http://localhost:5000/reminders/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            if result.ok:
+                warns = result.json()
+                em = Embed(
+                    title = await translate(curLang, 'command.reminders.title'),
+                    description = len(warns) > 0 and ''.join([f'{item["id"]} | {item["description"]} - {datetime.fromtimestamp(item["ends"]).strftime("%b %d %Y at %H:%M %p %Z")}\n' for item in warns['result']]) or await translate(curLang, 'command.reminders.none'),
+                    colour = Colour.blue()
+                )
+                await ctx.reply(embed=em, private=True)
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(), private=True)
+        
+        @reminder.command(name='delete')
+        async def remindme_delete(ctx: commands.Context, id: str):
+            """Delete a reminder"""
+            user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            user_info = user_data_req.json()
+            curLang = user_info.get('language', 'en')
+            result = requests.delete(f'http://localhost:5000/reminders/{ctx.server.id}/{ctx.author.id}/{id}', headers={
+                'authorization': bot_config.SECRET_KEY
+            })
+            if result.ok:
+                await ctx.reply(embed=EMBED_SUCCESS(await translate(curLang, 'command.reminders.delete.success')))
+            else:
+                await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, 'command.error')))
+
         @config.group(name='xp')
         async def xp(ctx: commands.Context):
             """Configure the xp giver"""

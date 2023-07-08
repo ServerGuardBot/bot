@@ -9,6 +9,7 @@ import re
 import requests
 
 WARNING_ID_REGEX = '^%s/%s/warning/' + r'([a-zA-Z]+)'
+REMINDER_ID_REGEX = '^%s/%s/reminder/' + r'([a-zA-Z]+)'
 
 moderation_blueprint = Blueprint('moderation', __name__)
 
@@ -17,6 +18,12 @@ def get_warning_id(guild_id, user_id, internal_id):
     warn_id = match.group(1)
 
     return warn_id
+
+def get_reminder_id(guild_id, user_id, internal_id):
+    match: re.Match = re.search(REMINDER_ID_REGEX % (guild_id, user_id), internal_id)
+    reminder_id = match.group(1)
+
+    return reminder_id
 
 class UserWarnings(MethodView):
     """ User Warning Resource """
@@ -371,6 +378,22 @@ class ExpiredStatuses(MethodView):
                         requests.delete(f'http://localhost:5000/moderation/{status.guild_id}/{status.user_id}/warnings/{get_warning_id(status.guild_id, status.user_id, status.internal_id)}', headers={
                             'authorization': app.config.get('SECRET_KEY')
                         })
+                    elif status.type == 'reminder':
+                        em = Embed(
+                            title = 'Reminder ended',
+                            colour = Colour.blue(),
+                            timestamp = datetime.now(),
+                            description = f'<@{status.user_id}>'
+                        )
+                        em.add_field(name='Reminder', value=status.value['description'], inline=False)
+                        await bot_api.create_channel_message(status.value['channel'], payload={
+                            'embeds': [em.to_dict()],
+                            'isPrivate': True
+                        })
+                        requests.delete(f'http://localhost:5000/reminders/{status.guild_id}/{status.user_id}/{get_reminder_id(status.guild_id, status.user_id, status.internal_id)}', headers={
+                            'authorization': app.config.get('SECRET_KEY')
+                        })
+                        
                 statuses.next()
 
             return 'Success', 200
