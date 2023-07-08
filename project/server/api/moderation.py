@@ -139,9 +139,9 @@ class UserTempBans(MethodView):
         post_data = request.get_json()
         reason = post_data.get('reason')
         issuer = post_data.get('issuer')
-        ends_at = post_data.get('ends_at')
+        ends_at = post_data.get('ends_at', None)
 
-        if reason is not None and issuer is not None and ends_at is not None:
+        if reason is not None and issuer is not None:
             ban: GuildUserStatus = GuildUserStatus.query.filter_by(guild_id = guild_id, user_id = user_id, type = 'ban').first()
 
             if ban is not None:
@@ -210,11 +210,17 @@ class UserTempBans(MethodView):
         ban: GuildUserStatus = GuildUserStatus.query.filter_by(guild_id = guild_id, user_id = user_id, type = 'ban').first()
 
         if ban is not None:
-            return jsonify({
-                'issuer': ban.value['issuer'],
-                'reason': ban.value['reason'],
-                'ends_at': ban.ends_at.timestamp()
-            }), 200
+            if ban.ends_at is not None:
+                return jsonify({
+                    'issuer': ban.value['issuer'],
+                    'reason': ban.value['reason'],
+                    'ends_at': ban.ends_at.timestamp()
+                }), 200
+            else:
+                return jsonify({
+                    'issuer': ban.value['issuer'],
+                    'reason': ban.value['reason']
+                }), 200
         else:
             return 'Not found', 404
 

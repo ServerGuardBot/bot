@@ -11,7 +11,7 @@ from guilded import Embed, Colour, Forbidden, BulkMemberRolesUpdateEvent, Member
     BanDeleteEvent, MessageUpdateEvent, MessageDeleteEvent, ForumTopicCreateEvent, ForumTopicDeleteEvent, ForumTopicUpdateEvent, \
     ChatMessage, ForumTopic, WebhookCreateEvent, WebhookUpdateEvent, ServerChannelCreateEvent, ServerChannelDeleteEvent, \
     ServerChannelUpdateEvent, ForumTopicReplyCreateEvent, ForumTopicReplyDeleteEvent, ForumTopicReplyUpdateEvent, \
-    AnnouncementReplyCreateEvent, AnnouncementReplyUpdateEvent, AnnouncementReplyDeleteEvent, http
+    AnnouncementReplyCreateEvent, AnnouncementReplyUpdateEvent, AnnouncementReplyDeleteEvent, User, http
 from humanfriendly import parse_timespan, format_timespan
 from better_profanity import Profanity
 from unidecode import unidecode
@@ -114,13 +114,55 @@ class ModerationModule(Module):
         async def ban(_, ctx: commands.Context, target: str, timespan: str=None, *_reason):
             """[Moderator+] Ban a user"""
             await self.validate_permission_level(1, ctx)
-            user = await self.convert_member(ctx, target)
+            user = await self.convert_member(ctx, target, True)
 
             user_data_req = requests.get(f'http://localhost:5000/userinfo/{ctx.server.id}/{ctx.author.id}', headers={
                 'authorization': bot_config.SECRET_KEY
             })
             user_info = user_data_req.json()
             curLang = user_info.get('language', 'en')
+
+            reason = ' '.join(_reason)
+
+            if timespan is not None:
+                try:
+                    timespan = parse_timespan(timespan)
+                except:
+                    reason = timespan + ' ' + reason
+                    timespan = None
+            
+            if isinstance(user, User):
+                # User not in server, schedule an automated ban once they join
+                if timespan is not None:
+                    requests.post(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/ban', json={
+                        'issuer': ctx.author.id,
+                        'reason': f'(User Prebanned By <@{ctx.author.id}>)\n{reason}',
+                        'ends_at': datetime.now().timestamp() + timespan
+                    }, headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                else:
+                    requests.post(f'http://localhost:5000/moderation/{ctx.server.id}/{user.id}/ban', json={
+                        'issuer': ctx.author.id,
+                        'reason': f'(User Prebanned By <@{ctx.author.id}>)\n{reason}'
+                    }, headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                em = Embed(
+                    title = await translate(curLang, 'command.ban.title'),
+                    colour = Colour.orange()
+                )
+                em.set_thumbnail(url=user.display_avatar.aws_url)
+                em.add_field(name=await translate(curLang, 'log.user'), value=user.mention)
+                em.add_field(name=await translate(curLang, 'log.issuer'), value=ctx.author.mention)
+                if timespan is not None:
+                    em.add_field(name=await translate(curLang, 'log.lasts'), value=format_timespan(timespan))
+                em.add_field(name=await translate(curLang, 'log.reason'), value=reason, inline=False)
+                await ctx.reply(embed=em, silent=True)
+                if logs_channel:
+                    channel = await ctx.server.fetch_channel(logs_channel)
+                    await channel.send(embed=em, silent=True)
+                return
 
             if await self.is_moderator(user):
                 await ctx.reply('This user is a moderator, I can\'t do that!')
@@ -132,15 +174,6 @@ class ModerationModule(Module):
             guild_data: dict = guild_data_req.json()
             config = guild_data.get('config', {})
             logs_channel = config.get('action_logs_channel', config.get('logs_channel'))
-
-            reason = ' '.join(_reason)
-
-            if timespan is not None:
-                try:
-                    timespan = parse_timespan(timespan)
-                except:
-                    reason = timespan + ' ' + reason
-                    timespan = None
             
             if user is not None:
                 await user.ban(reason=reason)
@@ -516,9 +549,18 @@ class ModerationModule(Module):
                     'authorization': bot_config.SECRET_KEY
                 })
 
+                ban_req = requests.get(f'http://localhost:5000/moderation/{event.server.id}/{member.id}/ban', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+
                 if mute_req.status_code == 200:
                     if config.get('mute_role'):
                         await bot_api.assign_role_to_member(event.server_id, member.id, config['mute_role'])
+                
+                if ban_req.status_code == 200:
+                    data: dict = ban_req.json()
+                    print(ban_req.text)
+                    await member.ban(reason=data.get('reason', f'A ban for this user was sheduled by user with ID "{data["issuer"]}"'))
                 
                 traffic_log_channel = config.get('traffic_logs_channel')
 
