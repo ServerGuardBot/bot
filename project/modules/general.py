@@ -1,9 +1,10 @@
+from json import JSONEncoder
 from pydoc import describe
 from project.modules.base import Module
 from project.modules.moderation import reset_filter_cache
 from project.helpers.embeds import *
 from project.helpers.Cache import Cache
-from project import bot_config
+from project import BotAPI, bot_config
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
 from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote, \
@@ -11,6 +12,8 @@ from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, 
 from datetime import datetime
 from humanfriendly import format_timespan, parse_timespan
 from project.helpers.translator import getLanguages, translate
+
+import guilded.http as http
 
 import os
 import re
@@ -1426,6 +1429,10 @@ class GeneralModule(Module):
                 await ctx.reply(embed=EMBED_COMMAND_ERROR(await translate(curLang, "command.error.number")))
 
         async def on_bulk_member_roles_update(event: BulkMemberRolesUpdateEvent):
+            # xp_remove_old
+            guild_data: dict = self.get_guild_data(event.server_id)
+            config = guild_data.get('config', {})
+            xp_remove_old = config.get('xp_remove_old', False)
             if event.server_id == 'aE9Zg6Kj':
                 for member in event.after:
                     roles = member._role_ids
@@ -1438,12 +1445,49 @@ class GeneralModule(Module):
                         lvl = 1
                     else:
                         lvl = 0
-                    user_data_req = requests.patch(f'http://localhost:5000/userinfo/aE9Zg6Kj/{member.id}', json={
+                    requests.patch(f'http://localhost:5000/userinfo/aE9Zg6Kj/{member.id}', json={
                         'premium': lvl
                     }, headers={
                         'authorization': bot_config.SECRET_KEY
                     })
             for member in event.after:
+                if xp_remove_old:
+                    __cache = config.get('__cache', {})
+                    level_roles = __cache.get('level_roles')
+
+                    with BotAPI() as bot_api:
+                        if level_roles is None or level_roles['0']['lastUpdated'] + (60 * 15) < datetime.now().timestamp():
+                                level_roles_req = (await bot_api.request(http.Route('GET', f'/teams/{event.server_id}/level_rewards', override_base=http.Route.USER_BASE))) or []
+                                level_roles = [
+                                    {
+                                        'lastUpdated': datetime.now().timestamp(),
+                                        'id': '0',
+                                        'roles': [
+                                            {
+                                                'level': role['level'],
+                                                'id': role['teamRoleId'],
+                                            } for role in level_roles_req],
+                                    }
+                                ]
+                                requests.put(f'http://localhost:5000/data/cache/{event.server_id}/level_roles', headers={
+                                    'authorization': bot_config.SECRET_KEY
+                                }, json=level_roles)
+                                level_roles = {
+                                    '0': level_roles[0],
+                                }
+                        level_roles = (level_roles['0'])['roles']
+                        lower_roles, highest_role = [], {'level': 0, 'id': -3429785678456}
+                        for role in level_roles:
+                            role: dict
+                            if role['id'] in member._role_ids:
+                                if role['level'] >= highest_role['level']:
+                                    if role['level'] != highest_role['level'] and highest_role['level'] > 0:
+                                        # Only add the highest role to lower_roles if the level is actually lower than this role
+                                        lower_roles.append(highest_role['id'])
+                                    highest_role = role
+                        if len(lower_roles) > 0:
+                            for role in lower_roles:
+                                await bot_api.request(http.Route('DELETE', f'/servers/{event.server_id}/members/{member.id}/roles/{role}'))
                 if member.id == event.server.owner.id:
                     permission_level = 4 # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
                 elif await self.user_can_manage_server(member):
