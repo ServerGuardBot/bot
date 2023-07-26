@@ -1432,7 +1432,7 @@ class GeneralModule(Module):
             # xp_remove_old
             guild_data: dict = self.get_guild_data(event.server_id)
             config = guild_data.get('config', {})
-            xp_remove_old = config.get('xp_remove_old', False)
+            xp_remove_old = config.get('xp_remove_old', 0) == 1
             if event.server_id == 'aE9Zg6Kj':
                 for member in event.after:
                     roles = member._role_ids

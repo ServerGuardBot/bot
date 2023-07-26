@@ -287,6 +287,7 @@ config_handlers = {
     'trusted_roles': handle_trusted_config,
     'untrusted_block_images': handle_bool_config,
     'xp_gain': handle_xp_gain,
+    'xp_remove_old': handle_bool_config,
     'use_leave': handle_bool_config,
     'leave_image': handle_url_config,
     'leave_message': handle_string_config,
