@@ -4,6 +4,7 @@ from project.modules.base import Module
 from project.modules.moderation import reset_filter_cache
 from project.helpers.embeds import *
 from project.helpers.Cache import Cache
+from project.server.api.guilds import getLevel
 from project import BotAPI, bot_config
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
@@ -12,6 +13,7 @@ from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, 
 from datetime import datetime
 from humanfriendly import format_timespan, parse_timespan
 from project.helpers.translator import getLanguages, translate
+from pyppeteer import launch
 
 import guilded.http as http
 
@@ -30,6 +32,7 @@ role = commands.RoleConverter()
 
 xp_cache = Cache(60)
 login_cache = Cache(60)
+xp_update_cache = Cache(30)
 
 class CustomHelpCommand(HelpCommand):
     def __init__(self, **options):
@@ -1617,6 +1620,89 @@ class GeneralModule(Module):
                         colour=Colour.gilded()
                     )
                     await message.reply(embed=em, private=True, delete_after=10)
+            guild_data: dict = self.get_guild_data(message.server_id)
+            config = guild_data.get('config', {})
+            xp_gain = config.get('xp_gain', {})
+
+            try:
+                if xp_update_cache.get(id) == None:
+                    xp_update_cache.set(id, True)
+                    current_xp: int = await message.author.award_xp(0) # Guilded doesn't support fetching XP, but returns the total amount after awarding
+                    # so we award 0 XP to get the current XP, it's a hack but it works I guess
+                    db_xp_user = requests.get(f'http://localhost:5000/getguilduser/{message.server_id}/{message.author.id}/xp', headers={
+                        'authorization': bot_config.SECRET_KEY
+                    }).json()
+                    requests.patch(f'http://localhost:5000/getguilduser/{message.server_id}/{message.author.id}/xp', json={
+                        'xp': current_xp
+                        }, headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                    level_now, level_before = getLevel(current_xp), getLevel(db_xp_user.get('xp', 0))
+                    if config.get('xp_announce_lu', 0) == 1 and level_now > level_before:
+                        print('OUTPUTTING LEVEL UP ANNOUNCEMENT')
+                        browser = await launch({
+                            'handleSIGINT': False,
+                            'handleSIGTERM': False,
+                            'handleSIGHUP': False,
+                            'headless': True,
+                            'args': [
+                                '--no-sandbox',
+                                '--disable-extensions',
+                                '--disable-breakpad',
+                                '--disable-background-networking',
+                                '--disable-background-timer-throttling',
+                                '--disable-backgrounding-occluded-windows',
+                                '--disable-component-update',
+                                '--disable-default-apps',
+                                '--disable-dev-shm-usage',
+                                '--disable-domain-reliability',
+                                '--disable-features=AudioServiceOutOfProcess',
+                                '--disable-hang-monitor',
+                                '--disable-ipc-flooding-protection',
+                                '--disable-notifications',
+                                '--disable-offer-store-unmasked-wallet-cards',
+                                '--disable-popup-blocking',
+                                '--disable-print-preview',
+                                '--disable-prompt-on-repost',
+                                '--disable-renderer-backgrounding',
+                                '--disable-setuid-sandbox',
+                                '--disable-speech-api',
+                                '--disable-sync',
+                                '--hide-scrollbars',
+                                '--ignore-gpu-blacklist',
+                                '--metrics-recording-only',
+                                '--mute-audio',
+                                '--no-default-browser-check',
+                                '--no-first-run',
+                                '--no-pings',
+                                '--no-zygote',
+                                '--password-store=basic',
+                                '--use-gl=swiftshader',
+                                '--use-mock-keychain',
+                            ],
+                        })
+                        page = await browser.newPage()
+                        await page.goto(f'http://localhost:5000/rankcard/{message.server_id}/{message.author.id}?levelup=show', {'waitUntil': 'networkidle0'})
+                        image = await page.screenshot({
+                            'omitBackground': True,
+                            'clip': {
+                                'width': 900,
+                                'height': 290,
+                                'x': 0,
+                                'y': 0,
+                            }
+                        })
+                        await browser.close()
+                        id = requests.post(f'http://localhost:5000/serve', json={
+                            'file': image.hex()
+                        }, headers={
+                            'authorization': bot_config.SECRET_KEY
+                        })
+                        print(f'File served with id {id.json()["id"]}')
+                        await message.reply(embed=Embed().set_image(url=f'https://api.serverguard.xyz/serve/{id.json()["id"]}'))
+            except Exception as e:
+                print(f"Failed to update internal user xp: {e}")
+
             if xp_cache.get(id):
                 return # They cannot gain xp at this point in time
 
@@ -1627,9 +1713,6 @@ class GeneralModule(Module):
             }) # Since the bot received a message from the server, make sure its active state is accurate in the DB
             # As in some cases, a server might be added while the bot is restarting.
 
-            guild_data: dict = self.get_guild_data(message.server_id)
-            config = guild_data.get('config', {})
-            xp_gain = config.get('xp_gain', {})
             if len(xp_gain) > 0 and any([item > 0 for item in list(xp_gain.values())]):
                 # Only go further if there are any gains that a user can possibly obtain
                 member = await message.guild.getch_member(message.author.id)

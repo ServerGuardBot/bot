@@ -37,6 +37,7 @@ markdownify = "*"
 psutil = "*"
 lxml = "*"
 scikit-learn = "*"
+pyppeteer = "*"
 
 [dev-packages]
 

@@ -115,6 +115,7 @@ class GuildUser(db.Model):
     bypass_verification = db.Column(db.Boolean, default=False)
     connections = db.Column(db.String(500), nullable=True)
     permission_level = db.Column(db.Integer, nullable=False, server_default="0")
+    xp = db.Column(db.Integer, nullable=False, server_default="0")
 
     def __init__(self, guild_id: str, user_id: str, hashed_ip: str=None, browser_id: str=None, using_vpn: bool=False, connections: str=None, permission_level: int=0):
         self.internal_id = f'{guild_id}/{user_id}'
