@@ -133,10 +133,14 @@ class VerifyUser(MethodView):
                 user_ip = request.headers.get('cf-connecting-ip', request.environ.get('HTTP_X_REAL_IP', request.remote_addr))
                 hashed_ip = hashlib.sha512(user_ip.encode('utf-8')).hexdigest()
 
+                user_info: UserInfo = await get_user_info(token.guild_id, token.user_id)
+
                 db_guild: dict = (await bot_api.get_server(token.guild_id)).get('server')
                 guild: Guild = Guild.query.filter_by(guild_id = token.guild_id).first()
 
-                premium_status = await get_user_premium_status(db_guild.get('ownerId'))
+                owner_user_info: UserInfo = await get_user_info(db_guild.get('ownerId'))
+
+                premium_status = owner_user_info.premium
 
                 block_tor = guild.config.get('block_tor')
                 logs_channel = guild.config.get('verify_logs_channel', guild.config.get('logs_channel'))
@@ -167,8 +171,6 @@ class VerifyUser(MethodView):
                     if cur_bid != browser_id or cur_vpn != using_vpn or cur_ip != hashed_ip or cur_con != user.connections:
                         db.session.add(user)
                         db.session.commit()
-                
-                user_info: UserInfo = await get_user_info(token.guild_id, token.user_id)
 
                 if turnstile is not None:
                     is_turnstile_valid = validate_turnstile(turnstile, user_ip)
