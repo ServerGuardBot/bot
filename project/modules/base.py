@@ -9,8 +9,6 @@ import requests
 import re
 
 guild_data_cache = Cache(60)
-guild_info_cache = Cache(20)
-premium_cache = Cache()
 
 MEMBER_REGEX = r'<@(.+)>'
 ROLE_REGEX = r'<@&(.+)>'
@@ -204,9 +202,6 @@ class Module:
         })
 
         return int(user_data_req.json().get('premium'))
-    
-    def reset_user_premium_cache(self, user_id):
-        premium_cache.remove(user_id)
 
     async def validate_permission_level(self, level: int, ctx: Context):
         allowed = True
