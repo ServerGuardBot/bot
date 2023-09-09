@@ -2006,3 +2006,20 @@ class GeneralModule(Module):
             requests.put(f'http://localhost:5000/data/cache/{event.server_id}/roles', headers={
                 'authorization': bot_config.SECRET_KEY
             }, json=role_payload)
+
+            bot_api = bot.http
+            channels_req = await bot_api.request(http.Route('GET', f'/teams/{event.server_id}/channels', override_base=http.Route.USER_BASE))
+            if channels_req is not None:
+                channels = channels_req['channels']
+                channel_payload = []
+
+                for channel in channels:
+                    channel_payload.append({
+                        'id': channel['id'],
+                        'name': channel['name'],
+                        'type': channel['contentType'],
+                        'jump': f'https://www.guilded.gg/{event.server.slug}/groups/{channel["groupId"]}/channels/{channel["id"]}',
+                    })
+                requests.put(f'http://localhost:5000/data/cache/{event.server_id}/channels', headers={
+                    'authorization': bot_config.SECRET_KEY
+                }, json=channel_payload)
