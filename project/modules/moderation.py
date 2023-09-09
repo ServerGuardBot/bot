@@ -31,6 +31,10 @@ LOGIN_CHANNEL_ID = '1f6fae7f-6cdf-403d-80b9-623a76f8b621'
 
 MODELS_ROOT = bot_config.PROJECT_ROOT + '/project/ml_models'
 
+API_KEY_REGEXES = [
+    r'gapi_([a-zA-Z0-9+\/]{86})==',
+]
+
 filters = {
     'toxicity': {
         'vectorizer': joblib.load(MODELS_ROOT + '/toxicity/vectorizer.joblib'),
@@ -721,6 +725,28 @@ class ModerationModule(Module):
                                 colour = Colour.red(),
                             ).add_field(name='Threat Category', inline=False)\
                             .add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
+                        return True
+            
+            if config.get('filter_api_keys', 0) == 1:
+                for pattern in API_KEY_REGEXES:
+                    match = re.match(pattern, message.content)
+                    if match is not None:
+                        if isinstance(message, ChatMessage):
+                            await message.reply(embed=EMBED_FILTERED(message.author, await translate(curLang, 'filter.api_key')), private=True)
+                        try:
+                            await message.delete()
+                        except Forbidden:
+                            await message.reply(embed=EMBED_DENIED(
+                                title='Permissions Error',
+                                description='Server Guard encountered a permissions error while trying to delete the messages.'
+                            ), private=True)
+                        if logs_channel is not None:
+                            await logs_channel.send(embed=EMBED_TIMESTAMP_NOW(
+                                title='API Key Detected',
+                                description=message.content.replace(match.group(0), '[REDACTED]'),
+                                url=message.share_url,
+                                colour = Colour.red(),
+                            ).add_field(name='User', value=f'[{message.author.name}]({message.author.profile_url})'))
                         return True
 
             if config.get('invite_link_filter', 0) == 1:
