@@ -1491,6 +1491,72 @@ class GeneralModule(Module):
                         if len(lower_roles) > 0:
                             for role in lower_roles:
                                 await bot_api.request(http.Route('DELETE', f'/servers/{event.server_id}/members/{member.id}/roles/{role}'))
+                
+                autoroles_req = requests.get(f'http://localhost:5000/autoroles/{event.server_id}', headers={
+                    'authorization': bot_config.SECRET_KEY
+                })
+                if autoroles_req.ok:
+                    to_add, to_remove = [], []
+                    print(f'Role ids for member {member.id} on server {event.server_id}:\n{member._role_ids}\n')
+                    for autorole in autoroles_req.json()['roles']:
+                        data: dict = autorole['data']
+                        has_roles: list = data['has_roles']
+                        has_all: bool = data['has_all']
+                        not_has_roles: list = data['not_has_roles']
+                        not_has_all: bool = data['not_has_all']
+                        target_role: int = autorole['role']
+                        should_have = False
+
+                        if len(has_roles) > 0:
+                            if has_all:
+                                if all([role in member._role_ids for role in has_roles]):
+                                    should_have = True
+                            else:
+                                if any([role in member._role_ids for role in has_roles]):
+                                    should_have = True
+                        if len(not_has_roles) > 0:
+                            if len(has_roles) > 0:
+                                # Act like a blacklist if there are roles in has_roles
+                                if not_has_all:
+                                    if all([role in member._role_ids for role in not_has_roles]):
+                                        should_have = False
+                                else:
+                                    if any([role in member._role_ids for role in not_has_roles]):
+                                        should_have = False
+                            else:
+                                # Otherwise, give the role to them as long as they
+                                # don't have any of the roles in not_has_roles
+                                if not_has_all:
+                                    if not all([role in member._role_ids for role in not_has_roles]):
+                                        should_have = True
+                                else:
+                                    if not any([role in member._role_ids for role in not_has_roles]):
+                                        should_have = True
+                        if should_have:
+                            print(f'Checking if can add {target_role} to {member.id} on server {event.server_id}\n')
+                            if not target_role in member._role_ids:
+                                to_add.append(target_role)
+                                print(f'Will add {target_role} to {member.id} on server {event.server_id}\n')
+                        else:
+                            print(f'Checking if can remove {target_role} from {member.id} on server {event.server_id}\n')
+                            if target_role in member._role_ids:
+                                to_remove.append(target_role)
+                                print(f'Will remove {target_role} from {member.id} on server {event.server_id}\n')
+                    for role in to_add:
+                        if role in to_remove:
+                            pass
+                        try:
+                            await bot.http.assign_role_to_member(event.server_id, member.id, role)
+                        except Exception as e:
+                            # Only have this try block so that the request failing
+                            # does not interrupt the rest of the process
+                            print(f'Failed to assign role {role} to {member.id} on server {event.server_id} due to {e}\n')
+                    for role in to_remove:
+                        try:
+                            await bot.http.remove_role_from_member(event.server_id, member.id, role)
+                        except Exception as e:
+                            print(f'Failed to remove role {role} from {member.id} on server {event.server_id} due to {e}\n')
+
                 if member.id == event.server.owner.id:
                     permission_level = 4 # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
                 elif await self.user_can_manage_server(member):
