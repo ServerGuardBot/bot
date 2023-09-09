@@ -282,24 +282,25 @@ async def run_cleanup_loop():
         })
         # Try to remove bot from unconfigured servers that are older than 1 week
         # NOTE: Maybe send an automated notice to unconfigured servers a day before removing itself?
-        for server in client.servers:
-            print(f'Checking "{server.id}"')
-            await asyncio.sleep(0)
-            try:
-                guild_data_req = requests.get(f'http://localhost:5000/guilddata/{server.id}', headers={
-                    'authorization': bot_config.SECRET_KEY
-                })
-                guild_data: dict = guild_data_req.json()
-                config = guild_data.get('config', {})
-                if len(config) == 0 or (len(config) == 1 and config.get('__cache') != None):
-                    me = await server.fetch_member(client.user_id)
-                    joined: datetime = me.joined_at
-                    diff = datetime.now() - joined
-                    if diff.days >= 7:
-                        await server.kick(me)
-                        del server
-            except Exception as e:
-                print(f'Failed to check "{server.id}" for being unconfigured: {e}')
+        if os.getenv('CLEANUP_SERVERS', 'false').lower() == 'true':
+            for server in client.servers:
+                print(f'Checking "{server.id}"')
+                await asyncio.sleep(0)
+                try:
+                    guild_data_req = requests.get(f'http://localhost:5000/guilddata/{server.id}', headers={
+                        'authorization': bot_config.SECRET_KEY
+                    })
+                    guild_data: dict = guild_data_req.json()
+                    config = guild_data.get('config', {})
+                    if len(config) == 0 or (len(config) == 1 and config.get('__cache') != None):
+                        me = await server.fetch_member(client.user_id)
+                        joined: datetime = me.joined_at
+                        diff = datetime.now() - joined
+                        if diff.days >= 7:
+                            await server.kick(me)
+                            del client.servers[server]
+                except Exception as e:
+                    print(f'Failed to check "{server.id}" for being unconfigured: {e}')
         await asyncio.sleep(60 * 30)
 
 if not os.getenv('MIGRATING_DB', '0') == '1':
