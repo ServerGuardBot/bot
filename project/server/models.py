@@ -194,6 +194,7 @@ class GuildRoleConfig(db.Model):
         self.guild_id = guild_id
         self.role_id = role_id
         self.type = type
+        self.value = value
 
 class FeedData(db.Model):
     """ Feed Data model for storing RSS feeds and their information """
