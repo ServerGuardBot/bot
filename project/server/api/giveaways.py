@@ -23,23 +23,26 @@ async def rollWinners(giveaway: Giveaway, save: bool):
     giveaway.winners = winners
 
     with BotAPI() as bot_api:
-        await bot_api.update_channel_message(
-            channel_id=giveaway.channel_id,
-            message_id=giveaway.original_message_id,
-            payload={
-                'embeds': [
-                    generateEmbed(
-                        giveaway.guild_id,
-                        giveaway.ended,
-                        giveaway.ends_at,
-                        giveaway.winners,
-                        giveaway.prize,
-                        giveaway.winner_amount,
-                        giveaway.hosted_by
-                    )
-                ]
-            }
-        )
+        try:
+            await bot_api.update_channel_message(
+                channel_id=giveaway.channel_id,
+                message_id=giveaway.original_message_id,
+                payload={
+                    'embeds': [
+                        generateEmbed(
+                            giveaway.guild_id,
+                            giveaway.ended,
+                            giveaway.ends_at,
+                            giveaway.winners,
+                            giveaway.prize,
+                            giveaway.winner_amount,
+                            giveaway.hosted_by
+                        )
+                    ]
+                }
+            )
+        except Exception as e:
+            print(f'[ERROR]: Failed to update giveaway message! Server: <{giveaway.guild_id}> Error: <{e}>')
     if save:
         db.session.add(giveaway)
         db.session.commit()
@@ -50,21 +53,24 @@ async def endGiveaway(giveaway: Giveaway, save: bool):
     await rollWinners(giveaway, save)
 
     with BotAPI() as bot_api:
-        em = Embed(
-            title='Giveaway Ended',
-            description=f':tada: Giveaway "{giveaway.prize}" has ended and winners have been chosen!',
-            colour=Colour.gilded(),
-        ).to_dict()
+        try:
+            em = Embed(
+                title='Giveaway Ended',
+                description=f':tada: Giveaway "{giveaway.prize}" has ended and winners have been chosen!',
+                colour=Colour.gilded(),
+            ).to_dict()
 
-        await bot_api.create_channel_message(
-                channel_id=giveaway.channel_id, 
-                payload={
-                    'embeds': [
-                        em
-                    ],
-                    'replyMessageIds': [giveaway.original_message_id]
-                }
-            )
+            await bot_api.create_channel_message(
+                    channel_id=giveaway.channel_id, 
+                    payload={
+                        'embeds': [
+                            em
+                        ],
+                        'replyMessageIds': [giveaway.original_message_id]
+                    }
+                )
+        except Exception as e:
+            print(f'[ERROR]: Failed to send giveaway end message! Server: <{giveaway.guild_id}> Error: <{e}>')
 
 def generateEmbed(server_id: str, ended: bool, ends_at: datetime, winners: list, prize: str, winners_count: int, hosted_by: str):
     guild: Guild = Guild.query \
