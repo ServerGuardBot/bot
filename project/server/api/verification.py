@@ -138,9 +138,9 @@ class VerifyUser(MethodView):
                 db_guild: dict = (await bot_api.get_server(token.guild_id)).get('server')
                 guild: Guild = Guild.query.filter_by(guild_id = token.guild_id).first()
 
-                owner_user_info: UserInfo = await get_user_info(db_guild.get('ownerId'))
+                owner_user_info: UserInfo = await get_user_info(token.guild_id, db_guild.get('ownerId'))
 
-                premium_status = owner_user_info.premium
+                premium_status = int(owner_user_info.premium)
 
                 block_tor = guild.config.get('block_tor')
                 logs_channel = guild.config.get('verify_logs_channel', guild.config.get('logs_channel'))
