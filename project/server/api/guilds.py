@@ -269,6 +269,9 @@ class UpdateGuildUserXP(MethodView):
             .filter(query.c.user_id == user_id) \
             .first()
         
+        if db_user == None:
+            return 'Not found', 404
+
         return jsonify({
             'xp': db_user.xp,
             'rank': db_user.rank

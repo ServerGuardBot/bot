@@ -96,7 +96,8 @@ class ServerCacheResource(MethodView):
                 cache[type] = cache_store
 
             for item in post_data:
-                del cache_store[item['id']]
+                if cache_store.get(item['id']):
+                    del cache_store[item['id']]
             
             db.session.add(guild_data)
             db.session.commit()

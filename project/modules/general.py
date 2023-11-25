@@ -9,7 +9,8 @@ from project import BotAPI, bot_config
 from guilded.ext import commands
 from guilded.ext.commands.help import HelpCommand, Paginator
 from guilded import Embed, BulkMemberRolesUpdateEvent, MessageReactionAddEvent, BotAddEvent, BotRemoveEvent, ChatMessage, Emote, \
-    ServerChannelCreateEvent, ServerChannelDeleteEvent, RoleCreateEvent, RoleDeleteEvent, RoleUpdateEvent, MemberRemoveEvent
+    ServerChannelCreateEvent, ServerChannelDeleteEvent, RoleCreateEvent, RoleDeleteEvent, RoleUpdateEvent, MemberRemoveEvent, \
+    MemberJoinEvent
 from datetime import datetime
 from humanfriendly import format_timespan, parse_timespan
 from project.helpers.translator import getLanguages, translate
@@ -244,6 +245,82 @@ class General(commands.Cog):
 
 class GeneralModule(Module):
     name = 'General'
+
+    async def scan_auto_roles(self, member: Member, user_join: bool=False):
+        bot = self.bot
+
+        autoroles_req = requests.get(f'http://localhost:5000/autoroles/{member.server_id}', headers={
+            'authorization': bot_config.SECRET_KEY
+        })
+        if autoroles_req.ok:
+            to_add, to_remove = [], []
+            print(f'Role ids for member {member.id} on server {member.server_id}:\n{member._role_ids}\n')
+            for autorole in autoroles_req.json()['roles']:
+                data: dict = autorole['data']
+                has_roles: list = data['has_roles']
+                has_all: bool = data['has_all']
+                not_has_roles: list = data['not_has_roles']
+                not_has_all: bool = data['not_has_all']
+                target_role: int = autorole['role']
+                join_role: bool = data.get('join_role', False)
+                delay_time: int = data.get('delay_time', 0)
+                should_have = False
+
+                if delay_time > 0 and user_join:
+                    # TODO: Send request to schedule role addition for user
+                    continue
+
+                if join_role and not user_join:
+                    continue
+                if len(has_roles) > 0:
+                    if has_all:
+                        if all([role in member._role_ids for role in has_roles]):
+                            should_have = True
+                    else:
+                        if any([role in member._role_ids for role in has_roles]):
+                            should_have = True
+                if len(not_has_roles) > 0:
+                    if len(has_roles) > 0:
+                        # Act like a blacklist if there are roles in has_roles
+                        if not_has_all:
+                            if all([role in member._role_ids for role in not_has_roles]):
+                                should_have = False
+                        else:
+                            if any([role in member._role_ids for role in not_has_roles]):
+                                should_have = False
+                    else:
+                        # Otherwise, give the role to them as long as they
+                        # don't have any of the roles in not_has_roles
+                        if not_has_all:
+                            if not all([role in member._role_ids for role in not_has_roles]):
+                                should_have = True
+                        else:
+                            if not any([role in member._role_ids for role in not_has_roles]):
+                                should_have = True
+                if should_have:
+                    print(f'Checking if can add {target_role} to {member.id} on server {member.server_id}\n')
+                    if not target_role in member._role_ids:
+                        to_add.append(target_role)
+                        print(f'Will add {target_role} to {member.id} on server {member.server_id}\n')
+                else:
+                    print(f'Checking if can remove {target_role} from {member.id} on server {member.server_id}\n')
+                    if target_role in member._role_ids:
+                        to_remove.append(target_role)
+                        print(f'Will remove {target_role} from {member.id} on server {member.server_id}\n')
+            for role in to_add:
+                if role in to_remove:
+                    pass
+                try:
+                    await bot.http.assign_role_to_member(member.server_id, member.id, role)
+                except Exception as e:
+                    # Only have this try block so that the request failing
+                    # does not interrupt the rest of the process
+                    print(f'Failed to assign role {role} to {member.id} on server {member.server_id} due to {e}\n')
+            for role in to_remove:
+                try:
+                    await bot.http.remove_role_from_member(member.server_id, member.id, role)
+                except Exception as e:
+                    print(f'Failed to remove role {role} from {member.id} on server {member.server_id} due to {e}\n')
 
     def initialize(self):
         bot = self.bot
@@ -1492,70 +1569,7 @@ class GeneralModule(Module):
                             for role in lower_roles:
                                 await bot_api.request(http.Route('DELETE', f'/servers/{event.server_id}/members/{member.id}/roles/{role}'))
                 
-                autoroles_req = requests.get(f'http://localhost:5000/autoroles/{event.server_id}', headers={
-                    'authorization': bot_config.SECRET_KEY
-                })
-                if autoroles_req.ok:
-                    to_add, to_remove = [], []
-                    print(f'Role ids for member {member.id} on server {event.server_id}:\n{member._role_ids}\n')
-                    for autorole in autoroles_req.json()['roles']:
-                        data: dict = autorole['data']
-                        has_roles: list = data['has_roles']
-                        has_all: bool = data['has_all']
-                        not_has_roles: list = data['not_has_roles']
-                        not_has_all: bool = data['not_has_all']
-                        target_role: int = autorole['role']
-                        should_have = False
-
-                        if len(has_roles) > 0:
-                            if has_all:
-                                if all([role in member._role_ids for role in has_roles]):
-                                    should_have = True
-                            else:
-                                if any([role in member._role_ids for role in has_roles]):
-                                    should_have = True
-                        if len(not_has_roles) > 0:
-                            if len(has_roles) > 0:
-                                # Act like a blacklist if there are roles in has_roles
-                                if not_has_all:
-                                    if all([role in member._role_ids for role in not_has_roles]):
-                                        should_have = False
-                                else:
-                                    if any([role in member._role_ids for role in not_has_roles]):
-                                        should_have = False
-                            else:
-                                # Otherwise, give the role to them as long as they
-                                # don't have any of the roles in not_has_roles
-                                if not_has_all:
-                                    if not all([role in member._role_ids for role in not_has_roles]):
-                                        should_have = True
-                                else:
-                                    if not any([role in member._role_ids for role in not_has_roles]):
-                                        should_have = True
-                        if should_have:
-                            print(f'Checking if can add {target_role} to {member.id} on server {event.server_id}\n')
-                            if not target_role in member._role_ids:
-                                to_add.append(target_role)
-                                print(f'Will add {target_role} to {member.id} on server {event.server_id}\n')
-                        else:
-                            print(f'Checking if can remove {target_role} from {member.id} on server {event.server_id}\n')
-                            if target_role in member._role_ids:
-                                to_remove.append(target_role)
-                                print(f'Will remove {target_role} from {member.id} on server {event.server_id}\n')
-                    for role in to_add:
-                        if role in to_remove:
-                            pass
-                        try:
-                            await bot.http.assign_role_to_member(event.server_id, member.id, role)
-                        except Exception as e:
-                            # Only have this try block so that the request failing
-                            # does not interrupt the rest of the process
-                            print(f'Failed to assign role {role} to {member.id} on server {event.server_id} due to {e}\n')
-                    for role in to_remove:
-                        try:
-                            await bot.http.remove_role_from_member(event.server_id, member.id, role)
-                        except Exception as e:
-                            print(f'Failed to remove role {role} from {member.id} on server {event.server_id} due to {e}\n')
+                await self.scan_auto_roles(member)
 
                 if member.id == event.server.owner.id:
                     permission_level = 4 # We know the owner of the guild is a moderator, bypass any unnecessary calls and checks
@@ -1695,77 +1709,79 @@ class GeneralModule(Module):
                     xp_update_cache.set(id, True)
                     current_xp: int = await message.author.award_xp(0) # Guilded doesn't support fetching XP, but returns the total amount after awarding
                     # so we award 0 XP to get the current XP, it's a hack but it works I guess
-                    db_xp_user = requests.get(f'http://localhost:5000/getguilduser/{message.server_id}/{message.author.id}/xp', headers={
+                    db_xp_user_req = requests.get(f'http://localhost:5000/getguilduser/{message.server_id}/{message.author.id}/xp', headers={
                         'authorization': bot_config.SECRET_KEY
-                    }).json()
+                    })
                     requests.patch(f'http://localhost:5000/getguilduser/{message.server_id}/{message.author.id}/xp', json={
                         'xp': current_xp
                         }, headers={
                         'authorization': bot_config.SECRET_KEY
                     })
-                    level_now, level_before = getLevel(current_xp), getLevel(db_xp_user.get('xp', 0))
-                    if config.get('xp_announce_lu', 0) == 1 and level_now > level_before:
-                        print('OUTPUTTING LEVEL UP ANNOUNCEMENT')
-                        browser = await launch({
-                            'handleSIGINT': False,
-                            'handleSIGTERM': False,
-                            'handleSIGHUP': False,
-                            'headless': True,
-                            'args': [
-                                '--no-sandbox',
-                                '--disable-extensions',
-                                '--disable-breakpad',
-                                '--disable-background-networking',
-                                '--disable-background-timer-throttling',
-                                '--disable-backgrounding-occluded-windows',
-                                '--disable-component-update',
-                                '--disable-default-apps',
-                                '--disable-dev-shm-usage',
-                                '--disable-domain-reliability',
-                                '--disable-features=AudioServiceOutOfProcess',
-                                '--disable-hang-monitor',
-                                '--disable-ipc-flooding-protection',
-                                '--disable-notifications',
-                                '--disable-offer-store-unmasked-wallet-cards',
-                                '--disable-popup-blocking',
-                                '--disable-print-preview',
-                                '--disable-prompt-on-repost',
-                                '--disable-renderer-backgrounding',
-                                '--disable-setuid-sandbox',
-                                '--disable-speech-api',
-                                '--disable-sync',
-                                '--hide-scrollbars',
-                                '--ignore-gpu-blacklist',
-                                '--metrics-recording-only',
-                                '--mute-audio',
-                                '--no-default-browser-check',
-                                '--no-first-run',
-                                '--no-pings',
-                                '--no-zygote',
-                                '--password-store=basic',
-                                '--use-gl=swiftshader',
-                                '--use-mock-keychain',
-                            ],
-                        })
-                        page = await browser.newPage()
-                        await page.goto(f'http://localhost:5000/rankcard/{message.server_id}/{message.author.id}?levelup=show', {'waitUntil': 'networkidle0'})
-                        image = await page.screenshot({
-                            'omitBackground': True,
-                            'clip': {
-                                'width': 900,
-                                'height': 290,
-                                'x': 0,
-                                'y': 0,
-                            }
-                        })
-                        await browser.close()
-                        id = requests.post(f'http://localhost:5000/serve', json={
-                            'file': image.hex()
-                        }, headers={
-                            'authorization': bot_config.SECRET_KEY
-                        })
-                        print(f'File served with id {id.json()["id"]}')
-                        await message.reply(embed=Embed().set_image(url=f'https://api.serverguard.xyz/serve/{id.json()["id"]}'))
+                    if db_xp_user_req.ok:
+                        db_xp_user = db_xp_user_req.json()
+                        level_now, level_before = getLevel(current_xp), getLevel(db_xp_user.get('xp', 0))
+                        if config.get('xp_announce_lu', 0) == 1 and level_now > level_before:
+                            print('OUTPUTTING LEVEL UP ANNOUNCEMENT')
+                            browser = await launch({
+                                'handleSIGINT': False,
+                                'handleSIGTERM': False,
+                                'handleSIGHUP': False,
+                                'headless': True,
+                                'args': [
+                                    '--no-sandbox',
+                                    '--disable-extensions',
+                                    '--disable-breakpad',
+                                    '--disable-background-networking',
+                                    '--disable-background-timer-throttling',
+                                    '--disable-backgrounding-occluded-windows',
+                                    '--disable-component-update',
+                                    '--disable-default-apps',
+                                    '--disable-dev-shm-usage',
+                                    '--disable-domain-reliability',
+                                    '--disable-features=AudioServiceOutOfProcess',
+                                    '--disable-hang-monitor',
+                                    '--disable-ipc-flooding-protection',
+                                    '--disable-notifications',
+                                    '--disable-offer-store-unmasked-wallet-cards',
+                                    '--disable-popup-blocking',
+                                    '--disable-print-preview',
+                                    '--disable-prompt-on-repost',
+                                    '--disable-renderer-backgrounding',
+                                    '--disable-setuid-sandbox',
+                                    '--disable-speech-api',
+                                    '--disable-sync',
+                                    '--hide-scrollbars',
+                                    '--ignore-gpu-blacklist',
+                                    '--metrics-recording-only',
+                                    '--mute-audio',
+                                    '--no-default-browser-check',
+                                    '--no-first-run',
+                                    '--no-pings',
+                                    '--no-zygote',
+                                    '--password-store=basic',
+                                    '--use-gl=swiftshader',
+                                    '--use-mock-keychain',
+                                ],
+                            })
+                            page = await browser.newPage()
+                            await page.goto(f'http://localhost:5000/rankcard/{message.server_id}/{message.author.id}?levelup=show', {'waitUntil': 'networkidle0'})
+                            image = await page.screenshot({
+                                'omitBackground': True,
+                                'clip': {
+                                    'width': 900,
+                                    'height': 290,
+                                    'x': 0,
+                                    'y': 0,
+                                }
+                            })
+                            await browser.close()
+                            id = requests.post(f'http://localhost:5000/serve', json={
+                                'file': image.hex()
+                            }, headers={
+                                'authorization': bot_config.SECRET_KEY
+                            })
+                            print(f'File served with id {id.json()["id"]}')
+                            await message.reply(embed=Embed().set_image(url=f'https://api.serverguard.xyz/serve/{id.json()["id"]}'))
             except Exception as e:
                 print(f"Failed to update internal user xp: {e}")
 
@@ -1909,6 +1925,10 @@ class GeneralModule(Module):
                 except Exception as e:
                     print(f'Failed to send leave message in {server.name} ({server.id}) for user {user.name} ({user.id}): {str(e)}')
         bot.leave_listeners.append(on_member_removed)
+
+        async def on_member_added(event: MemberJoinEvent):
+            await self.scan_auto_roles(event.member, True)
+        bot.join_listeners.append(on_member_added)
 
         async def on_role_create(event: RoleCreateEvent):
             role = event.role

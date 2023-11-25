@@ -7,6 +7,22 @@ from project.helpers.images import *
 from datetime import datetime
 from sqlalchemy_json import NestedMutableJson
 
+class FFlag(db.Model):
+    """ FFlag model for storing feature flags """
+    __tablename__ = 'fflags'
+
+    flag = db.Column(db.String(500), primary_key=True)
+    type = db.Column(db.Integer, nullable=False, server_default="0")
+    value = db.Column(db.String, nullable=False, server_default="")
+
+    def __init__(self, flag: str, type: int, value: str):
+        self.flag = flag
+        self.type = type
+        self.value = value
+    
+    def __repr__(self):
+        return f'<FFlag {self.flag}={self.value}>'
+
 class BotData(db.Model):
     """ Bot Data model for storing persistent bot information """
     __tablename__ = 'botdata'
@@ -116,6 +132,7 @@ class GuildUser(db.Model):
     connections = db.Column(db.String(500), nullable=True)
     permission_level = db.Column(db.Integer, nullable=False, server_default="0")
     xp = db.Column(db.Integer, nullable=False, server_default="0")
+    join_date = db.Column(db.DateTime, nullable=True)
 
     def __init__(self, guild_id: str, user_id: str, hashed_ip: str=None, browser_id: str=None, using_vpn: bool=False, connections: str=None, permission_level: int=0):
         self.internal_id = f'{guild_id}/{user_id}'
@@ -126,6 +143,7 @@ class GuildUser(db.Model):
         self.using_vpn = using_vpn
         self.connections = connections
         self.permission_level = permission_level
+        self.join_date = datetime.now()
     
     def __repr__(self):
         return f'<GuildUser {self.internal_id}>'

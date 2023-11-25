@@ -950,9 +950,13 @@ class ModerationModule(Module):
                 return
             if event.message.author.bot or event.channel_id == LOGIN_CHANNEL_ID:
                 return
-            if event.message.automoderated:
-                # This message was handled by automod and deleted, don't log it as it should already be logged in the automod logs
-                return
+            try:
+                if getattr(event.message, 'automoderated', False):
+                    # This message was handled by automod and deleted, don't log it as it should already be logged in the automod logs
+                    return
+            except:
+                # Just continue in this case
+                pass
             guild_data: dict = self.get_guild_data(event.server_id)
             message_log_channel = guild_data.get('config', {}).get('message_logs_channel')
 
@@ -971,6 +975,11 @@ class ModerationModule(Module):
                 em.add_field(name='ID', value=member.id)
                 em.add_field(name='Deleted message contents', value=event.message.content, inline=False)
                 em.set_thumbnail(url=member.avatar.aws_url)
+
+                img = re.search(IMAGE_EMBED_REGEX, event.message.content)
+                if img:
+                    em.set_image(url=img.group(2))
+
                 await channel.send(embed=em, silent=True)
         
         bot.message_delete_listeners.append(on_message_delete)

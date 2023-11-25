@@ -48,6 +48,8 @@ async def send_feed(server_id: str, channel_id: str, entry: dict):
                 url=f'https://api.serverguard.xyz/proxy/{t}'
             )
 
+        print(f'Sending feed update to {server_id}/{channel_id} with payload: {em.to_dict()}')
+
         return await post_webhook(server_id, channel_id, 
             embeds=[
                 em

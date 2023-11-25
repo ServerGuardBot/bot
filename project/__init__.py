@@ -644,6 +644,7 @@ from project.server.api.giveaways import giveaways_blueprint
 from project.server.api.images import images_blueprint
 from project.server.api.reminders import reminders_blueprint
 from project.server.api.roles import roles_blueprint
+from project.server.api.fflags import fflag_blueprint
 
 app.register_blueprint(verification_blueprint)
 app.register_blueprint(moderation_blueprint)
@@ -655,6 +656,7 @@ app.register_blueprint(giveaways_blueprint)
 app.register_blueprint(images_blueprint)
 app.register_blueprint(reminders_blueprint)
 app.register_blueprint(roles_blueprint)
+app.register_blueprint(fflag_blueprint)
 
 if app_settings == 'DevelopmentConfig' and not os.getenv('MIGRATING_DB', '0') == '1':
     import threading
