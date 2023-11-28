@@ -81,8 +81,21 @@ async def get_user_info(guild_id: str, user_id: str):
             guild_user: dict = (await bot_api.get_user(user_id)).get('user')
 
             try:
-                guilds: list = (await bot_api.request(http.Route('GET', f'/users/{user_id}/teams', override_base=http.Route.USER_BASE))).get('teams', [])
-            except:
+                guild_members = GuildUser.query.filter_by(user_id = user_id).all()
+                guilds: list = []
+                for member in guild_members:
+                    member: GuildUser
+                    guild: Guild = Guild.query.filter(Guild.guild_id == member.guild_id).first()
+                    if guild and member.permission_level > 2 and guild.active:
+                        guilds.append({
+                            'id': guild.guild_id,
+                            'name': guild.name,
+                            'profilePicture': guild.avatar,
+                        })
+                # guilds: list = (await bot_api.request(http.Route('GET', f'/users/{user_id}/teams', override_base=http.Route.USER_BASE))).get('teams', [])
+            except Exception as e:
+                print(e)
+                print('Failed to get guilds')
                 # Fallback to an empty dict if not possible, or to None if we are updating
                 if user is None:
                     guilds: list = {}
